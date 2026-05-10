@@ -1,0 +1,107 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark;
+}
+
+:root {
+  --gp-bg: #f8f9fc;
+  --gp-surface: #ffffff;
+  --gp-surface-2: #f1f4f9;
+  --gp-border: #e2e8f0;
+  --gp-text: #1e293b;
+  --gp-text-muted: #64748b;
+  --gp-primary: #4f46e5;
+  --gp-primary-light: #818cf8;
+  --gp-primary-bg: #eef2ff;
+  --gp-success: #10b981;
+  --gp-success-bg: #ecfdf5;
+  --gp-warning: #f59e0b;
+  --gp-warning-bg: #fffbeb;
+  --gp-danger: #ef4444;
+  --gp-danger-bg: #fef2f2;
+  --gp-sidebar-width: 260px;
+  --gp-sidebar-collapsed: 72px;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+}
+
+[data-theme="dark"] {
+  --gp-bg: #0f1117;
+  --gp-surface: #1a1d27;
+  --gp-surface-2: #22263a;
+  --gp-border: #2e3248;
+  --gp-text: #e2e8f0;
+  --gp-text-muted: #94a3b8;
+  --gp-primary-bg: #1e1b4b;
+}
+
+* { box-sizing: border-box; }
+
+/* BUG FIX: prevent horizontal scroll on all screens */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--gp-bg);
+  color: var(--gp-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5 { font-family: var(--font-display); }
+
+.gp-card {
+  background: var(--gp-surface);
+  border: 1px solid var(--gp-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.04);
+}
+
+.gp-card-glass {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(79,70,229,0.08);
+}
+
+[data-theme="dark"] .gp-card-glass {
+  background: rgba(26,29,39,0.7);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.gp-gradient-text {
+  background: linear-gradient(135deg, #4f46e5 0%, #818cf8 50%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gp-border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gp-text-muted); }
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.hero-gradient {
+  background: linear-gradient(-45deg, #eef2ff, #f0fdf4, #fef3c7, #ede9fe);
+  background-size: 400% 400%;
+  animation: gradientShift 8s ease infinite;
+}
+
+[data-theme="dark"] .hero-gradient {
+  background: linear-gradient(-45deg, #1e1b4b, #0f2027, #1a1d27, #1e1b4b);
+  background-size: 400% 400%;
+}
+
+/* BUG FIX: recharts svg overflow on mobile */
+.recharts-wrapper, .recharts-surface {
+  overflow: visible;
+}
