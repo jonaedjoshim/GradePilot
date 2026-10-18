@@ -1,11 +1,11 @@
-import Sidebar from './Sidebar';
-import Topbar from './Topbar';
-import Footer from './Footer';
-import { Outlet } from 'react-router';
+import Sidebar from "./Sidebar";
+import Topbar from "./Topbar";
+import Footer from "./Footer";
+import { Outlet } from "react-router";
 
 export default function Layout() {
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--gp-bg)' }}>
+    <div className="flex min-h-screen" style={{ background: "var(--gp-bg)" }}>
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0 w-full">
         <Topbar />
