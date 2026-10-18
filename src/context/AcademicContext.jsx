@@ -1,34 +1,99 @@
 import { useEffect, useMemo, useReducer } from "react";
-
 import { DEFAULT_SUBJECT } from "../data/gradeData";
+import {
+  DEFAULT_UNIVERSITY,
+  getDefaultAcademicPeriod,
+  isValidUniversity,
+} from "../data/universityData";
 import { calculateCGPA } from "../lib/calculations";
 import { AcademicContext } from "./academicContextInstance";
-
 import {
   loadAcademicState,
   saveAcademicState,
   validateAcademicState,
 } from "../lib/storage";
 
+function createSubject(university) {
+  return {
+    ...DEFAULT_SUBJECT(),
+    yearSemester: getDefaultAcademicPeriod(university),
+  };
+}
+
 function createInitialState() {
   return {
-    subjects: [DEFAULT_SUBJECT(), DEFAULT_SUBJECT(), DEFAULT_SUBJECT()],
-
+    university: DEFAULT_UNIVERSITY,
+    subjects: [
+      createSubject(DEFAULT_UNIVERSITY),
+      createSubject(DEFAULT_UNIVERSITY),
+      createSubject(DEFAULT_UNIVERSITY),
+    ],
     previousCGPA: "",
     previousCredits: "",
     targetCGPA: "",
     remainingCredits: "",
-
+    universityProfiles: {},
     theme: "light",
     sidebarCollapsed: false,
-
     aiInsights: null,
     aiLoading: false,
   };
 }
 
+function getCurrentProfile(state) {
+  return {
+    subjects: state.subjects,
+    previousCGPA: state.previousCGPA,
+    previousCredits: state.previousCredits,
+    targetCGPA: state.targetCGPA,
+    remainingCredits: state.remainingCredits,
+  };
+}
+
+function createEmptyProfile(university) {
+  return {
+    subjects: [
+      createSubject(university),
+      createSubject(university),
+      createSubject(university),
+    ],
+    previousCGPA: "",
+    previousCredits: "",
+    targetCGPA: "",
+    remainingCredits: "",
+  };
+}
+
 function academicReducer(state, action) {
   switch (action.type) {
+    case "SET_UNIVERSITY": {
+      const nextUniversity = action.payload;
+
+      if (
+        !isValidUniversity(nextUniversity) ||
+        nextUniversity === state.university
+      ) {
+        return state;
+      }
+
+      const profiles = {
+        ...state.universityProfiles,
+        [state.university]: getCurrentProfile(state),
+      };
+
+      const nextProfile =
+        profiles[nextUniversity] ?? createEmptyProfile(nextUniversity);
+
+      return {
+        ...state,
+        ...nextProfile,
+        university: nextUniversity,
+        universityProfiles: profiles,
+        aiInsights: null,
+        aiLoading: false,
+      };
+    }
+
     case "SET_SUBJECTS":
       return {
         ...state,
@@ -38,7 +103,7 @@ function academicReducer(state, action) {
     case "ADD_SUBJECT":
       return {
         ...state,
-        subjects: [...state.subjects, DEFAULT_SUBJECT()],
+        subjects: [...state.subjects, createSubject(state.university)],
       };
 
     case "ADD_SUBJECT_WITH_DATA":
@@ -128,9 +193,10 @@ function academicReducer(state, action) {
 
     case "RESET":
       return {
-        ...createInitialState(),
-        theme: state.theme,
-        sidebarCollapsed: state.sidebarCollapsed,
+        ...state,
+        ...createEmptyProfile(state.university),
+        aiInsights: null,
+        aiLoading: false,
       };
 
     default:

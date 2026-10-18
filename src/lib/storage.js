@@ -1,16 +1,27 @@
-import { GRADE_POINTS, YEAR_SEMESTER_OPTIONS } from "../data/gradeData.js";
+import { GRADE_POINTS } from "../data/gradeData.js";
+import {
+  DEFAULT_UNIVERSITY,
+  UNIVERSITY_TYPES,
+  getAcademicPeriods,
+  getDefaultAcademicPeriod,
+  isValidUniversity,
+} from "../data/universityData.js";
 
 const STORAGE_KEY = "gradepilot_state";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 
-const DEFAULT_SEMESTER = YEAR_SEMESTER_OPTIONS[0];
-
-const PERSISTED_FIELDS = [
+const PROFILE_FIELDS = [
   "subjects",
   "previousCGPA",
   "previousCredits",
   "targetCGPA",
   "remainingCredits",
+];
+
+const PERSISTED_FIELDS = [
+  ...PROFILE_FIELDS,
+  "university",
+  "universityProfiles",
   "theme",
   "sidebarCollapsed",
 ];
@@ -29,7 +40,27 @@ function normalizeNumber(value, min, max = Infinity) {
   return isValidNumber(value, min, max) ? String(value) : "";
 }
 
-function normalizeSubject(subject) {
+function normalizePeriod(value, university) {
+  const periods = getAcademicPeriods(university);
+
+  if (periods.includes(value)) {
+    return value;
+  }
+
+  if (university === UNIVERSITY_TYPES.NATIONAL) {
+    const year = periods.find((period) =>
+      String(value ?? "").startsWith(period),
+    );
+
+    if (year) {
+      return year;
+    }
+  }
+
+  return getDefaultAcademicPeriod(university);
+}
+
+function normalizeSubject(subject, university) {
   if (!subject || typeof subject !== "object" || Array.isArray(subject)) {
     return null;
   }
@@ -48,13 +79,11 @@ function normalizeSubject(subject) {
 
     grade: Object.hasOwn(GRADE_POINTS, subject.grade) ? subject.grade : "B+",
 
-    yearSemester: YEAR_SEMESTER_OPTIONS.includes(subject.yearSemester)
-      ? subject.yearSemester
-      : DEFAULT_SEMESTER,
+    yearSemester: normalizePeriod(subject.yearSemester, university),
   };
 }
 
-export function normalizeSubjects(subjects) {
+export function normalizeSubjects(subjects, university = DEFAULT_UNIVERSITY) {
   if (!Array.isArray(subjects)) {
     return [];
   }
@@ -62,7 +91,7 @@ export function normalizeSubjects(subjects) {
   const seenIds = new Set();
 
   return subjects.reduce((result, subject) => {
-    const normalized = normalizeSubject(subject);
+    const normalized = normalizeSubject(subject, university);
 
     if (!normalized) {
       return result;
@@ -73,10 +102,40 @@ export function normalizeSubjects(subjects) {
     }
 
     seenIds.add(normalized.id);
-    result.push(normalized);
 
-    return result;
+    return [...result, normalized];
   }, []);
+}
+
+function normalizeProfile(profile, university, defaults) {
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+    return defaults;
+  }
+
+  return {
+    subjects: Array.isArray(profile.subjects)
+      ? normalizeSubjects(profile.subjects, university)
+      : defaults.subjects,
+
+    previousCGPA: normalizeNumber(profile.previousCGPA, 0, 4),
+
+    previousCredits: normalizeNumber(profile.previousCredits, 0),
+
+    targetCGPA: normalizeNumber(profile.targetCGPA, 0, 4),
+
+    remainingCredits: normalizeNumber(profile.remainingCredits, 0),
+  };
+}
+
+function getDefaultProfile(university) {
+  return {
+    subjects: [],
+    previousCGPA: "",
+    previousCredits: "",
+    targetCGPA: "",
+    remainingCredits: "",
+    university,
+  };
 }
 
 export function validateAcademicState(data, defaults) {
@@ -84,20 +143,36 @@ export function validateAcademicState(data, defaults) {
     return defaults;
   }
 
+  const university = isValidUniversity(data.university)
+    ? data.university
+    : DEFAULT_UNIVERSITY;
+
+  const currentProfile = normalizeProfile(data, university, defaults);
+
+  const savedProfiles =
+    data.universityProfiles &&
+    typeof data.universityProfiles === "object" &&
+    !Array.isArray(data.universityProfiles)
+      ? data.universityProfiles
+      : {};
+
+  const universityProfiles = {};
+
+  for (const type of Object.values(UNIVERSITY_TYPES)) {
+    if (savedProfiles[type]) {
+      universityProfiles[type] = normalizeProfile(
+        savedProfiles[type],
+        type,
+        getDefaultProfile(type),
+      );
+    }
+  }
+
   return {
     ...defaults,
-
-    subjects: Array.isArray(data.subjects)
-      ? normalizeSubjects(data.subjects)
-      : defaults.subjects,
-
-    previousCGPA: normalizeNumber(data.previousCGPA, 0, 4),
-
-    previousCredits: normalizeNumber(data.previousCredits, 0),
-
-    targetCGPA: normalizeNumber(data.targetCGPA, 0, 4),
-
-    remainingCredits: normalizeNumber(data.remainingCredits, 0),
+    ...currentProfile,
+    university,
+    universityProfiles,
 
     theme: ["light", "dark"].includes(data.theme) ? data.theme : defaults.theme,
 
@@ -125,13 +200,10 @@ export function loadAcademicState(defaults) {
 
     const parsed = JSON.parse(saved);
 
-    if (!parsed || typeof parsed !== "object") {
-      return defaults;
-    }
-
     return validateAcademicState(parsed, defaults);
   } catch (error) {
     console.warn("Unable to load saved academic data:", error);
+
     return defaults;
   }
 }
@@ -155,6 +227,7 @@ export function saveAcademicState(state) {
     return true;
   } catch (error) {
     console.warn("Unable to save academic data:", error);
+
     return false;
   }
 }
