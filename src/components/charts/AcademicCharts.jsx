@@ -59,7 +59,7 @@ function EmptyChart({
 }) {
   return (
     <div
-      className="flex h-[260px] items-center justify-center rounded-xl border border-dashed px-5 text-center text-xs sm:text-sm"
+      className="flex h-65 items-center justify-center rounded-xl border border-dashed px-5 text-center text-xs sm:text-sm"
       style={{
         borderColor: "var(--gp-border)",
         color: "var(--gp-text-muted)",
@@ -94,7 +94,7 @@ export function GradeDistributionChart({ subjects }) {
   }
 
   return (
-    <div className="h-[260px] w-full min-w-0">
+    <div className="h-65 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -162,7 +162,7 @@ export function GPATrendChart({ subjects }) {
   }
 
   return (
-    <div className="h-[260px] w-full min-w-0">
+    <div className="h-65 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={data}
@@ -247,7 +247,7 @@ export function CreditAnalysisChart({ subjects }) {
   }
 
   return (
-    <div className="h-[260px] w-full min-w-0">
+    <div className="h-65 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -340,7 +340,7 @@ export function YearSemesterChart({ subjects }) {
   }
 
   return (
-    <div className="h-[260px] w-full min-w-0">
+    <div className="h-65 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}

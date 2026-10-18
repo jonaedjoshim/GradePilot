@@ -1,167 +1,113 @@
-import { motion } from 'framer-motion';
-import { Trash2 } from 'lucide-react';
-import { GRADE_LIST, GRADE_MARKS } from '../../data/gradeData';
+import { memo } from "react";
+import { Trash2 } from "lucide-react";
+import { GRADE_LIST, GRADE_MARKS } from "../../data/gradeData";
 
-export default function SubjectRow({ subject, index, onUpdate, onRemove, canRemove }) {
-  const handle = (field) => (e) =>
-    onUpdate(subject.id, { [field]: e.target.value });
+function SubjectRow({ subject, index, onUpdate, onRemove, canRemove = true }) {
+  const handleChange = (field) => (event) => {
+    const value =
+      field === "credit" ? Number(event.target.value) : event.target.value;
 
-  const handleCredit = (e) =>
-    onUpdate(subject.id, { credit: Number(e.target.value) });
-
-  const inputStyle = {
-    background: 'var(--gp-surface-2)',
-    border: '1px solid var(--gp-border)',
-    color: 'var(--gp-text)',
-    outline: 'none',
-    transition: 'border-color 0.2s',
-    minWidth: 0,
-    width: '100%',
+    onUpdate(subject.id, { [field]: value });
   };
 
-  const selectStyle = {
-    ...inputStyle,
-    appearance: 'none',
-    WebkitAppearance: 'none',
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 8px center',
-    paddingRight: '28px',
-    cursor: 'pointer',
-  };
-
-  const focusHandler = (e) => (e.target.style.borderColor = '#4f46e5');
-  const blurHandler = (e) => (e.target.style.borderColor = 'var(--gp-border)');
+  const inputId = `subject-${subject.id}`;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      transition={{ delay: index * 0.04 }}
-      className="flex flex-col sm:grid gap-2 items-start sm:items-center rounded-xl p-3 sm:p-0"
+    <div
+      className="grid min-w-0 grid-cols-1 gap-3 rounded-xl border p-3 sm:grid-cols-[32px_minmax(0,1fr)_88px_112px_36px] sm:items-center sm:gap-2 sm:border-transparent sm:px-2 sm:py-2"
       style={{
-        gridTemplateColumns: '28px 1fr 72px 90px 28px',
-        background: 'transparent',
-        border: 'none',
+        background: "var(--gp-surface)",
+        borderColor: "var(--gp-border)",
       }}
     >
-      {/* Row */}
-      <div className="sm:contents flex w-full items-center gap-2">
-        {/* Index */}
-        <div
-          className="text-xs text-center w-7 h-7 rounded-lg flex items-center justify-center font-semibold shrink-0"
-          style={{ background: 'var(--gp-surface-2)', color: 'var(--gp-text-muted)' }}
+      <div className="flex items-center justify-between sm:justify-center">
+        <span
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold"
+          style={{
+            background: "var(--gp-surface-2)",
+            color: "var(--gp-text-muted)",
+          }}
         >
           {index + 1}
+        </span>
+
+        <span
+          className="text-[11px] font-medium sm:hidden"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
+          Subject {index + 1}
+        </span>
+      </div>
+
+      <div className="min-w-0">
+        <label htmlFor={`${inputId}-name`} className="gp-label sm:sr-only">
+          Subject Name
+        </label>
+
+        <input
+          id={`${inputId}-name`}
+          type="text"
+          value={subject.name ?? ""}
+          onChange={handleChange("name")}
+          placeholder="e.g. Mathematics"
+          className="gp-input"
+          autoComplete="off"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:contents">
+        <div className="min-w-0">
+          <label htmlFor={`${inputId}-credit`} className="gp-label sm:sr-only">
+            Credits
+          </label>
+
+          <input
+            id={`${inputId}-credit`}
+            type="number"
+            min="0"
+            max="10"
+            step="0.5"
+            value={subject.credit ?? ""}
+            onChange={handleChange("credit")}
+            className="gp-input text-center"
+          />
         </div>
 
-        {/* Subject Name */}
-        <input
-          value={subject.name}
-          onChange={handle('name')}
-          placeholder="Subject name…"
-          className="flex-1 sm:w-full px-3 py-2 text-sm rounded-xl"
-          style={inputStyle}
-          onFocus={focusHandler}
-          onBlur={blurHandler}
-        />
+        <div className="min-w-0">
+          <label htmlFor={`${inputId}-grade`} className="gp-label sm:sr-only">
+            Grade
+          </label>
 
-        {/* Credit */}
-        <input
-          type="number"
-          value={subject.credit}
-          onChange={handleCredit}
-          min="1"
-          max="6"
-          className="sm:hidden w-14 text-center px-2 py-2 text-sm rounded-xl shrink-0"
-          style={inputStyle}
-          onFocus={focusHandler}
-          onBlur={blurHandler}
-        />
-
-        {/* Grade - mobile */}
-        <div className="sm:hidden relative shrink-0" style={{ width: '80px' }}>
           <select
+            id={`${inputId}-grade`}
             value={subject.grade}
-            onChange={handle('grade')}
-            className="w-full px-2 py-2 text-sm rounded-xl"
-            style={selectStyle}
-            onFocus={focusHandler}
-            onBlur={blurHandler}
+            onChange={handleChange("grade")}
+            className="gp-input cursor-pointer"
           >
-            {GRADE_LIST.map(g => (
-              <option key={g} value={g}>{g} ({GRADE_MARKS[g]})</option>
+            {GRADE_LIST.map((grade) => (
+              <option key={grade} value={grade}>
+                {grade} ({GRADE_MARKS[grade]})
+              </option>
             ))}
           </select>
         </div>
-
-        {/* Remove (mobile: inline) */}
-        <div className="flex sm:hidden justify-center shrink-0">
-          {canRemove && (
-            <motion.button
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onRemove(subject.id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-              style={{ color: '#ef4444' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <Trash2 size={13} />
-            </motion.button>
-          )}
-        </div>
       </div>
 
-      {/* Desktop: credit + grade */}
-      <div className="hidden sm:contents">
-        {/* Credit */}
-        <input
-          type="number"
-          value={subject.credit}
-          onChange={handleCredit}
-          min="1"
-          max="6"
-          className="w-full text-center px-2 py-2 text-sm rounded-xl"
-          style={inputStyle}
-          onFocus={focusHandler}
-          onBlur={blurHandler}
-        />
-
-        {/* Grade */}
-        <div className="relative w-full">
-          <select
-            value={subject.grade}
-            onChange={handle('grade')}
-            className="w-full px-2 py-2 text-sm rounded-xl"
-            style={selectStyle}
-            onFocus={focusHandler}
-            onBlur={blurHandler}
-          >
-            {GRADE_LIST.map(g => (
-              <option key={g} value={g}>{g} ({GRADE_MARKS[g]})</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Remove (desktop) */}
-        <div className="flex justify-center">
-          {canRemove && (
-            <motion.button
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => onRemove(subject.id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-              style={{ color: '#ef4444' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <Trash2 size={13} />
-            </motion.button>
-          )}
-        </div>
+      <div className="flex justify-end sm:justify-center">
+        <button
+          type="button"
+          onClick={() => onRemove(subject.id)}
+          disabled={!canRemove}
+          aria-label={`Remove subject ${index + 1}`}
+          title="Remove subject"
+          className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-(--gp-danger-bg) disabled:opacity-30"
+          style={{ color: "var(--gp-danger)" }}
+        >
+          <Trash2 size={17} />
+        </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
+
+export default memo(SubjectRow);

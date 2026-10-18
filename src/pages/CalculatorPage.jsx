@@ -1,4 +1,5 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
+import { Link } from "react-router";
 import {
   Plus,
   RotateCcw,
@@ -8,14 +9,18 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  BookOpen,
+  GraduationCap,
+  ArrowRight,
+  Info,
+  TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import Swal from "sweetalert2";
+import toast from "react-hot-toast";
 import { useAcademic } from "../hooks/useAcademic";
 import SubjectRow from "../components/ui/SubjectRow";
 import { GRADE_POINTS, DEFAULT_SUBJECT } from "../data/gradeData";
 import { exportToPDF, exportToImage } from "../utils/exportPDF";
-import Swal from "sweetalert2";
-import toast from "react-hot-toast";
 
 const YEAR_GROUPS = [
   {
@@ -36,75 +41,296 @@ const YEAR_GROUPS = [
   },
 ];
 
+function getGpaColor(gpa) {
+  if (gpa >= 3.5) return "var(--gp-success)";
+  if (gpa >= 3) return "var(--gp-primary)";
+  if (gpa >= 2.5) return "var(--gp-warning)";
+  return "var(--gp-danger)";
+}
+
+function getSemesterStats(subjects) {
+  const validSubjects = subjects.filter(
+    (subject) =>
+      subject.name?.trim() &&
+      Object.hasOwn(GRADE_POINTS, subject.grade) &&
+      Number(subject.credit) > 0,
+  );
+
+  const result = validSubjects.reduce(
+    (accumulator, subject) => {
+      const credits = Number(subject.credit);
+
+      return {
+        weightedPoints:
+          accumulator.weightedPoints + GRADE_POINTS[subject.grade] * credits,
+        credits: accumulator.credits + credits,
+      };
+    },
+    {
+      weightedPoints: 0,
+      credits: 0,
+    },
+  );
+
+  return {
+    gpa: result.credits > 0 ? result.weightedPoints / result.credits : 0,
+    credits: result.credits,
+    count: validSubjects.length,
+  };
+}
+
+function SectionHeading({ icon: Icon, title, description }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+        style={{
+          background: "var(--gp-primary-bg)",
+          color: "var(--gp-primary)",
+        }}
+      >
+        <Icon size={19} />
+      </div>
+
+      <div className="min-w-0">
+        <h2
+          className="text-sm font-semibold sm:text-base"
+          style={{ color: "var(--gp-text)" }}
+        >
+          {title}
+        </h2>
+
+        <p className="mt-1 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ResultCard({ cgpa, totalCredits }) {
+  const safeCgpa = Number.isFinite(Number(cgpa)) ? Number(cgpa) : 0;
+
+  const progress = Math.max(0, Math.min(100, (safeCgpa / 4) * 100));
+
+  const hasResults = Number(totalCredits) > 0;
+
+  return (
+    <section className="gp-card overflow-hidden p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p
+            className="text-xs font-semibold uppercase tracking-[0.12em]"
+            style={{ color: "var(--gp-text-muted)" }}
+          >
+            Academic Result
+          </p>
+
+          <h2
+            className="mt-1 text-base font-semibold"
+            style={{ color: "var(--gp-text)" }}
+          >
+            Current CGPA
+          </h2>
+        </div>
+
+        <div
+          className="flex size-11 items-center justify-center rounded-xl"
+          style={{
+            background: "var(--gp-primary-bg)",
+            color: "var(--gp-primary)",
+          }}
+        >
+          <GraduationCap size={22} />
+        </div>
+      </div>
+
+      <div className="mt-7 text-center">
+        <div className="flex items-baseline justify-center gap-2">
+          <span
+            className="gp-tabular-nums text-5xl font-bold tracking-tight sm:text-6xl"
+            style={{ color: getGpaColor(safeCgpa) }}
+          >
+            {safeCgpa.toFixed(2)}
+          </span>
+
+          <span
+            className="text-sm font-medium"
+            style={{ color: "var(--gp-text-muted)" }}
+          >
+            / 4.00
+          </span>
+        </div>
+
+        <p className="mt-2 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+          {hasResults
+            ? "Updated automatically as you edit your results"
+            : "Add academic results to get started"}
+        </p>
+      </div>
+
+      <div
+        className="mt-7 h-2.5 overflow-hidden rounded-full"
+        style={{ background: "var(--gp-surface-2)" }}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-300"
+          style={{
+            width: `${progress}%`,
+            background: getGpaColor(safeCgpa),
+          }}
+        />
+      </div>
+
+      <div
+        className="mt-5 flex items-center justify-between border-t pt-4 text-xs"
+        style={{ borderColor: "var(--gp-border)" }}
+      >
+        <span style={{ color: "var(--gp-text-muted)" }}>Total Credits</span>
+
+        <span className="font-semibold" style={{ color: "var(--gp-text)" }}>
+          {totalCredits}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function SummaryCard({ subjects, totalCredits }) {
+  const validSubjects = subjects.filter(
+    (subject) =>
+      subject.name?.trim() &&
+      Object.hasOwn(GRADE_POINTS, subject.grade) &&
+      Number(subject.credit) > 0,
+  );
+
+  const averageGpa =
+    validSubjects.length > 0
+      ? validSubjects.reduce(
+          (sum, subject) => sum + GRADE_POINTS[subject.grade],
+          0,
+        ) / validSubjects.length
+      : 0;
+
+  const failedSubjects = validSubjects.filter(
+    (subject) => subject.grade === "F",
+  ).length;
+
+  const stats = [
+    ["Total Credits", totalCredits],
+    ["Subjects", validSubjects.length],
+    ["Failed Subjects", failedSubjects],
+    ["Average Grade Point", averageGpa.toFixed(2)],
+  ];
+
+  return (
+    <section className="gp-card p-5">
+      <h2 className="text-sm font-semibold" style={{ color: "var(--gp-text)" }}>
+        Result Summary
+      </h2>
+
+      <div className="mt-5 space-y-4">
+        {stats.map(([label, value]) => (
+          <div
+            key={label}
+            className="flex items-center justify-between gap-3 text-xs sm:text-sm"
+          >
+            <span style={{ color: "var(--gp-text-muted)" }}>{label}</span>
+
+            <span
+              className="gp-tabular-nums font-semibold"
+              style={{
+                color:
+                  label === "Failed Subjects" && value > 0
+                    ? "var(--gp-danger)"
+                    : "var(--gp-text)",
+              }}
+            >
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SubjectHeaders() {
+  return (
+    <div
+      className="hidden grid-cols-[32px_minmax(0,1fr)_88px_112px_36px] items-center gap-2 px-2 text-[11px] font-semibold sm:grid"
+      style={{ color: "var(--gp-text-muted)" }}
+    >
+      <span className="text-center">#</span>
+      <span>Subject Name</span>
+      <span className="text-center">Credits</span>
+      <span>Grade</span>
+      <span />
+    </div>
+  );
+}
+
 export default function CalculatorPage() {
   const { state, dispatch, computed } = useAcademic();
+
   const { subjects, previousCGPA, previousCredits } = state;
+
   const { cgpa, totalCredits } = computed;
 
   const [viewMode, setViewMode] = useState("list");
-  const [collapsedGroups, setCollapsedGroups] = useState({});
-  // Track which year-group is "active" (expanded) in year view
   const [activeYear, setActiveYear] = useState("1st Year");
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
-  const handleUpdate = (id, data) =>
-    dispatch({ type: "UPDATE_SUBJECT", payload: { id, data } });
+  const handleUpdate = (id, data) => {
+    dispatch({
+      type: "UPDATE_SUBJECT",
+      payload: { id, data },
+    });
+  };
 
-  const handleRemove = (id) =>
-    dispatch({ type: "REMOVE_SUBJECT", payload: id });
+  const handleRemove = (id) => {
+    dispatch({
+      type: "REMOVE_SUBJECT",
+      payload: id,
+    });
+  };
 
   const handleAdd = () => {
     dispatch({ type: "ADD_SUBJECT" });
     toast.success("Subject added");
   };
 
-  // Add subject to a specific semester
   const handleAddToSemester = (yearSemester) => {
-    const newSubject = { ...DEFAULT_SUBJECT(), yearSemester };
-    dispatch({ type: "ADD_SUBJECT_WITH_DATA", payload: newSubject });
+    dispatch({
+      type: "ADD_SUBJECT_WITH_DATA",
+      payload: {
+        ...DEFAULT_SUBJECT(),
+        yearSemester,
+      },
+    });
+
     toast.success("Subject added");
   };
 
   const handleReset = async () => {
-    const res = await Swal.fire({
-      title: "Reset all data?",
-      text: "This will clear all subjects and settings.",
+    const result = await Swal.fire({
+      title: "Reset all academic data?",
+      text: "Your subjects and previous results will be cleared.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#4f46e5",
       cancelButtonColor: "#64748b",
-      confirmButtonText: "Yes, reset",
+      confirmButtonText: "Reset data",
     });
-    if (res.isConfirmed) {
+
+    if (result.isConfirmed) {
       dispatch({ type: "RESET" });
-      toast.success("Data reset");
+      toast.success("Academic data reset");
     }
   };
 
-  const toggleGroup = (key) =>
-    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const semesterStats = (semSubs) => {
-    const valid = semSubs.filter((s) => s.name && s.grade);
-    if (!valid.length) return { gpa: 0, credits: 0 };
-    const ws = valid.reduce(
-      (sum, s) => sum + (GRADE_POINTS[s.grade] || 0) * s.credit,
-      0,
-    );
-    const tc = valid.reduce((sum, s) => sum + Number(s.credit), 0);
-    return { gpa: tc ? parseFloat((ws / tc).toFixed(2)) : 0, credits: tc };
-  };
-
-  const cgpaColor =
-    cgpa >= 3.5
-      ? "#10b981"
-      : cgpa >= 3.0
-        ? "#4f46e5"
-        : cgpa >= 2.5
-          ? "#f59e0b"
-          : "#ef4444";
-
-  const handleExportPDF = () =>
-    toast.promise(
+  const handleExportPDF = () => {
+    return toast.promise(
       exportToPDF({
         cgpa,
         totalCredits,
@@ -112,451 +338,392 @@ export default function CalculatorPage() {
         aiInsights: state.aiInsights,
       }),
       {
-        loading: "Generating PDF…",
-        success: "PDF exported!",
-        error: "Export failed",
+        loading: "Generating PDF...",
+        success: "PDF exported successfully",
+        error: "Could not export PDF",
       },
     );
+  };
 
-  const handleExportImage = () =>
-    toast.promise(exportToImage(), {
-      loading: "Capturing screenshot…",
-      success: "Image saved!",
-      error: "Capture failed — try PDF instead",
+  const handleExportImage = () => {
+    return toast.promise(exportToImage(), {
+      loading: "Generating image...",
+      success: "Image exported successfully",
+      error: "Could not export image",
     });
+  };
 
-  const gpaColor = (gpa) =>
-    gpa >= 3.5
-      ? "#10b981"
-      : gpa >= 3.0
-        ? "#4f46e5"
-        : gpa >= 2.5
-          ? "#f59e0b"
-          : "#ef4444";
+  const toggleGroup = (key) => {
+    setCollapsedGroups((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  };
+
+  const hasAcademicData =
+    subjects.some((subject) => subject.name?.trim()) ||
+    Number(previousCredits) > 0;
 
   return (
-    <div className="space-y-6" id="gradepilot-export-root">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:justify-between">
-        <div>
-          <h1
-            className="text-2xl font-bold"
+    <div id="gradepilot-export-root" className="min-w-0 space-y-6 sm:space-y-7">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <div
+            className="mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold"
             style={{
-              fontFamily: "var(--font-display)",
-              color: "var(--gp-text)",
+              background: "var(--gp-primary-bg)",
+              borderColor: "var(--gp-border)",
+              color: "var(--gp-primary)",
             }}
           >
-            CGPA Calculator
+            <Calculator size={13} />
+            Academic Calculator
+          </div>
+
+          <h1
+            className="text-2xl font-bold tracking-tight sm:text-[28px]"
+            style={{ color: "var(--gp-text)" }}
+          >
+            GPA & CGPA Calculator
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--gp-text-muted)" }}>
-            Add your subjects to calculate your CGPA in real-time.
+
+          <p
+            className="mt-2 max-w-xl text-sm leading-relaxed"
+            style={{ color: "var(--gp-text-muted)" }}
+          >
+            Calculate your academic results with accurate, credit-weighted
+            grading.
           </p>
         </div>
 
-        {/* View toggle */}
         <div
-          className="flex gap-1.5 p-1 rounded-xl self-start"
+          className="flex w-fit items-center gap-1 rounded-xl p-1"
           style={{ background: "var(--gp-surface-2)" }}
         >
           {[
-            { mode: "list", icon: Calculator, label: "List" },
-            { mode: "year", icon: Layers, label: "Year-wise" },
+            {
+              mode: "list",
+              icon: Calculator,
+              label: "List View",
+            },
+            {
+              mode: "year",
+              icon: Layers,
+              label: "Year-wise",
+            },
           ].map(({ mode, icon: Icon, label }) => (
-            <motion.button
+            <button
               key={mode}
-              whileTap={{ scale: 0.96 }}
+              type="button"
               onClick={() => setViewMode(mode)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={
-                viewMode === mode
-                  ? {
-                      background: "var(--gp-surface)",
-                      color: "#4f46e5",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-                    }
-                  : { color: "var(--gp-text-muted)" }
-              }
+              aria-pressed={viewMode === mode}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors"
+              style={{
+                background:
+                  viewMode === mode ? "var(--gp-surface)" : "transparent",
+                color:
+                  viewMode === mode
+                    ? "var(--gp-primary)"
+                    : "var(--gp-text-muted)",
+                boxShadow: viewMode === mode ? "var(--gp-shadow-sm)" : "none",
+              }}
             >
-              <Icon size={13} />
+              <Icon size={15} />
               {label}
-            </motion.button>
+            </button>
           ))}
         </div>
-      </div>
+      </header>
 
-      {/* Mobile CGPA card */}
-      <div className="lg:hidden gp-card p-5 text-center">
-        <p
-          className="text-xs font-semibold uppercase tracking-widest mb-2"
-          style={{ color: "var(--gp-text-muted)" }}
-        >
-          Current CGPA
-        </p>
-        <motion.p
-          key={cgpa}
-          initial={{ scale: 0.9, opacity: 0.5 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="text-5xl font-bold mb-1"
-          style={{ fontFamily: "var(--font-display)", color: cgpaColor }}
-        >
-          {cgpa.toFixed(2)}
-        </motion.p>
-        <p className="text-xs" style={{ color: "var(--gp-text-muted)" }}>
-          out of 4.00
-        </p>
-        <div
-          className="mt-3 h-2 rounded-full overflow-hidden"
-          style={{ background: "var(--gp-surface-2)" }}
-        >
-          <motion.div
-            className="h-full rounded-full"
-            style={{
-              background: `linear-gradient(90deg, ${cgpaColor}, ${cgpaColor}88)`,
-            }}
-            animate={{ width: `${(cgpa / 4) * 100}%` }}
-            transition={{ duration: 0.8 }}
-          />
-        </div>
-      </div>
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-5">
+          <section className="gp-card p-5 sm:p-6">
+            <SectionHeading
+              icon={BookOpen}
+              title="Previous Academic Results"
+              description="Include previously completed credits in your CGPA."
+            />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT PANEL */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Previous Result */}
-          <div className="gp-card p-5">
-            <h3
-              className="font-semibold text-sm mb-4"
-              style={{ color: "var(--gp-text)" }}
-            >
-              Previous Result{" "}
-              <span style={{ color: "var(--gp-text-muted)", fontWeight: 400 }}>
-                (Optional)
-              </span>
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                {
-                  label: "Previous CGPA",
-                  key: "SET_PREVIOUS_CGPA",
-                  val: previousCGPA,
-                  ph: "e.g. 3.25",
-                  type: "number",
-                  step: "0.01",
-                  max: "4",
-                },
-                {
-                  label: "Credits Completed",
-                  key: "SET_PREVIOUS_CREDITS",
-                  val: previousCredits,
-                  ph: "e.g. 60",
-                  type: "number",
-                },
-              ].map(({ label, key, val, ph, type, step, max }) => (
-                <div key={key}>
-                  <label
-                    className="text-xs font-medium block mb-1"
-                    style={{ color: "var(--gp-text-muted)" }}
-                  >
-                    {label}
-                  </label>
-                  <input
-                    type={type}
-                    step={step}
-                    min="0"
-                    max={max}
-                    placeholder={ph}
-                    value={val}
-                    onChange={(e) =>
-                      dispatch({ type: key, payload: e.target.value })
-                    }
-                    className="w-full px-3 py-2 text-sm rounded-xl border outline-none transition-colors"
-                    style={{
-                      background: "var(--gp-surface-2)",
-                      border: "1px solid var(--gp-border)",
-                      color: "var(--gp-text)",
-                    }}
-                    onFocus={(e) => (e.target.style.borderColor = "#4f46e5")}
-                    onBlur={(e) =>
-                      (e.target.style.borderColor = "var(--gp-border)")
-                    }
-                  />
-                </div>
-              ))}
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="previous-cgpa" className="gp-label">
+                  Previous CGPA
+                </label>
+
+                <input
+                  id="previous-cgpa"
+                  type="number"
+                  min="0"
+                  max="4"
+                  step="0.01"
+                  placeholder="e.g. 3.25"
+                  value={previousCGPA}
+                  onChange={(event) =>
+                    dispatch({
+                      type: "SET_PREVIOUS_CGPA",
+                      payload: event.target.value,
+                    })
+                  }
+                  className="gp-input"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="previous-credits" className="gp-label">
+                  Previously Completed Credits
+                </label>
+
+                <input
+                  id="previous-credits"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 60"
+                  value={previousCredits}
+                  onChange={(event) =>
+                    dispatch({
+                      type: "SET_PREVIOUS_CREDITS",
+                      payload: event.target.value,
+                    })
+                  }
+                  className="gp-input"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Subjects */}
-          <div className="gp-card p-4 sm:p-5">
-            {/* LIST VIEW */}
-            {viewMode === "list" && (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <h3
-                    className="font-semibold text-sm"
-                    style={{ color: "var(--gp-text)" }}
-                  >
-                    Current Subjects
-                  </h3>
-                  <span
-                    className="text-xs px-2 py-1 rounded-lg"
-                    style={{
-                      background: "var(--gp-primary-bg)",
-                      color: "#4f46e5",
-                    }}
-                  >
-                    {subjects.length} subject{subjects.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
+            <div
+              className="mt-4 flex items-start gap-2 rounded-xl p-3 text-xs"
+              style={{
+                background: "var(--gp-primary-bg)",
+                color: "var(--gp-primary)",
+              }}
+            >
+              <Info size={16} className="mt-0.5 shrink-0" />
 
-                {/* Column headers - desktop only */}
-                <div
-                  className="hidden sm:grid gap-2 mb-3 text-xs font-semibold"
-                  style={{
-                    gridTemplateColumns: "28px 1fr 72px 90px 28px",
-                    color: "var(--gp-text-muted)",
-                  }}
-                >
-                  <div className="text-center">#</div>
-                  <div>Subject Name</div>
-                  <div className="text-center">Credit</div>
-                  <div>Grade</div>
-                  <div />
-                </div>
+              <p>
+                Previous results are optional. Leave them empty if you are
+                calculating your first academic term.
+              </p>
+            </div>
+          </section>
+
+          <section className="gp-card min-w-0 p-4 sm:p-6">
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <SectionHeading
+                icon={Layers}
+                title={
+                  viewMode === "list" ? "Your Subjects" : "Year-wise Subjects"
+                }
+                description="Manage subjects, credits, and grades."
+              />
+
+              <span className="gp-badge gp-badge-primary">
+                {subjects.length} Subjects
+              </span>
+            </div>
+
+            {viewMode === "list" ? (
+              <div className="min-w-0 space-y-3">
+                <SubjectHeaders />
 
                 <div className="space-y-2">
-                  <AnimatePresence>
-                    {subjects.map((s, i) => (
-                      <SubjectRow
-                        key={s.id}
-                        subject={s}
-                        index={i}
-                        onUpdate={handleUpdate}
-                        onRemove={handleRemove}
-                        canRemove={subjects.length > 1}
-                      />
-                    ))}
-                  </AnimatePresence>
+                  {subjects.map((subject, index) => (
+                    <SubjectRow
+                      key={subject.id}
+                      subject={subject}
+                      index={index}
+                      onUpdate={handleUpdate}
+                      onRemove={handleRemove}
+                      canRemove={subjects.length > 1}
+                    />
+                  ))}
                 </div>
 
-                <div className="flex gap-2 mt-4 flex-wrap">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleAdd}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
-                    style={{
-                      background: "var(--gp-primary-bg)",
-                      color: "#4f46e5",
-                      border: "1px dashed #818cf8",
-                    }}
-                  >
-                    <Plus size={15} /> Add Subject
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleReset}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
-                    style={{
-                      background: "var(--gp-surface-2)",
-                      color: "var(--gp-text-muted)",
-                      border: "1px solid var(--gp-border)",
-                    }}
-                  >
-                    <RotateCcw size={13} /> Reset
-                  </motion.button>
-                </div>
-              </>
-            )}
-
-            {/* YEAR-WISE VIEW */}
-            {viewMode === "year" && (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <h3
-                    className="font-semibold text-sm"
-                    style={{ color: "var(--gp-text)" }}
-                  >
-                    Year-wise Subjects
-                  </h3>
-                </div>
-
-                {/* Year tabs */}
                 <div
-                  className="flex gap-1 mb-4 p-1 rounded-xl overflow-x-auto"
+                  className="flex flex-wrap items-center gap-3 border-t pt-5"
+                  style={{ borderColor: "var(--gp-border)" }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleAdd}
+                    className="gp-btn gp-btn-primary"
+                  >
+                    <Plus size={17} />
+                    Add Subject
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="gp-btn gp-btn-secondary"
+                  >
+                    <RotateCcw size={16} />
+                    Reset All
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="min-w-0 space-y-5">
+                <div
+                  className="flex gap-1 overflow-x-auto rounded-xl p-1"
                   style={{ background: "var(--gp-surface-2)" }}
                 >
-                  {YEAR_GROUPS.map((yr) => {
-                    const yrSubjects = subjects.filter((s) =>
-                      yr.semesters.includes(
-                        s.yearSemester || "1st Year - 1st Semester",
-                      ),
-                    );
-                    const isActive = activeYear === yr.label;
+                  {YEAR_GROUPS.map((year) => {
+                    const count = subjects.filter(
+                      (subject) =>
+                        year.semesters.includes(
+                          subject.yearSemester || "1st Year - 1st Semester",
+                        ) && subject.name?.trim(),
+                    ).length;
+
                     return (
-                      <motion.button
-                        key={yr.label}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => setActiveYear(yr.label)}
-                        className="flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all"
-                        style={
-                          isActive
-                            ? {
-                                background: "var(--gp-surface)",
-                                color: "#4f46e5",
-                                boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-                              }
-                            : { color: "var(--gp-text-muted)" }
-                        }
+                      <button
+                        key={year.label}
+                        type="button"
+                        onClick={() => setActiveYear(year.label)}
+                        aria-pressed={activeYear === year.label}
+                        className="flex min-w-max flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+                        style={{
+                          background:
+                            activeYear === year.label
+                              ? "var(--gp-surface)"
+                              : "transparent",
+                          color:
+                            activeYear === year.label
+                              ? "var(--gp-primary)"
+                              : "var(--gp-text-muted)",
+                        }}
                       >
-                        {yr.label}
-                        {yrSubjects.filter((s) => s.name).length > 0 && (
-                          <span className="ml-1 opacity-60">
-                            ({yrSubjects.filter((s) => s.name).length})
-                          </span>
+                        {year.label}
+                        {count > 0 && (
+                          <span className="opacity-70">({count})</span>
                         )}
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
 
-                {/* Semesters for active year */}
-                {YEAR_GROUPS.filter((yr) => yr.label === activeYear).map(
-                  (yr) => (
-                    <div key={yr.label} className="space-y-4">
-                      {yr.semesters.map((sem) => {
-                        const semSubjects = subjects.filter(
-                          (s) =>
-                            (s.yearSemester || "1st Year - 1st Semester") ===
-                            sem,
+                {YEAR_GROUPS.filter((year) => year.label === activeYear).map(
+                  (year) => (
+                    <div key={year.label} className="space-y-4">
+                      {year.semesters.map((semester) => {
+                        const semesterSubjects = subjects.filter(
+                          (subject) =>
+                            (subject.yearSemester ||
+                              "1st Year - 1st Semester") === semester,
                         );
-                        const stats = semesterStats(semSubjects);
-                        const isCollapsed = collapsedGroups[sem];
-                        const semLabel = sem.replace(/^\w+ Year - /, ""); // "1st Semester"
+
+                        const stats = getSemesterStats(semesterSubjects);
+
+                        const collapsed = collapsedGroups[semester];
+
+                        const semesterLabel =
+                          semester.split(" - ")[1] || semester;
 
                         return (
                           <div
-                            key={sem}
-                            className="rounded-xl overflow-hidden"
-                            style={{ border: "1px solid var(--gp-border)" }}
+                            key={semester}
+                            className="min-w-0 overflow-hidden rounded-xl border"
+                            style={{
+                              borderColor: "var(--gp-border)",
+                            }}
                           >
                             <button
-                              onClick={() => toggleGroup(sem)}
-                              className="w-full flex items-center justify-between px-4 py-3 transition-colors"
-                              style={{ background: "var(--gp-surface-2)" }}
+                              type="button"
+                              onClick={() => toggleGroup(semester)}
+                              aria-expanded={!collapsed}
+                              className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                              style={{
+                                background: "var(--gp-surface-2)",
+                              }}
                             >
-                              <div className="flex items-center gap-2 min-w-0">
-                                {isCollapsed ? (
-                                  <ChevronRight size={14} color="#4f46e5" />
+                              <div className="flex min-w-0 items-center gap-2">
+                                {collapsed ? (
+                                  <ChevronRight
+                                    size={17}
+                                    className="shrink-0"
+                                  />
                                 ) : (
-                                  <ChevronDown size={14} color="#4f46e5" />
+                                  <ChevronDown size={17} className="shrink-0" />
                                 )}
+
                                 <span
-                                  className="font-semibold text-sm"
-                                  style={{ color: "var(--gp-text)" }}
-                                >
-                                  {semLabel}
-                                </span>
-                                <span
-                                  className="text-xs px-2 py-0.5 rounded-full shrink-0"
+                                  className="truncate text-xs font-semibold sm:text-sm"
                                   style={{
-                                    background: "var(--gp-primary-bg)",
-                                    color: "#4f46e5",
+                                    color: "var(--gp-text)",
                                   }}
                                 >
-                                  {semSubjects.length} subj
+                                  {semesterLabel}
+                                </span>
+
+                                <span className="gp-badge gp-badge-primary shrink-0">
+                                  {stats.count}
                                 </span>
                               </div>
-                              <div
-                                className="flex items-center gap-3 text-xs shrink-0"
-                                style={{ color: "var(--gp-text-muted)" }}
-                              >
-                                <span className="hidden sm:inline">
-                                  {stats.credits} credits
-                                </span>
-                                <span
-                                  className="font-bold text-sm"
-                                  style={{ color: gpaColor(stats.gpa) }}
+
+                              <div className="shrink-0 text-right">
+                                <p
+                                  className="gp-tabular-nums text-xs font-bold sm:text-sm"
+                                  style={{
+                                    color: getGpaColor(stats.gpa),
+                                  }}
                                 >
-                                  GPA {stats.gpa.toFixed(2)}
-                                </span>
+                                  {stats.gpa.toFixed(2)}
+                                </p>
+
+                                <p
+                                  className="text-[10px]"
+                                  style={{
+                                    color: "var(--gp-text-muted)",
+                                  }}
+                                >
+                                  {stats.credits} credits
+                                </p>
                               </div>
                             </button>
 
-                            <AnimatePresence>
-                              {!isCollapsed && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: "auto", opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.25 }}
-                                  className="overflow-hidden"
-                                >
-                                  <div
-                                    className="p-3 space-y-2"
-                                    style={{ background: "var(--gp-surface)" }}
+                            {!collapsed && (
+                              <div className="min-w-0 space-y-3 p-3 sm:p-4">
+                                {semesterSubjects.length > 0 ? (
+                                  <>
+                                    <SubjectHeaders />
+
+                                    <div className="space-y-2">
+                                      {semesterSubjects.map(
+                                        (subject, index) => (
+                                          <SubjectRow
+                                            key={subject.id}
+                                            subject={subject}
+                                            index={index}
+                                            onUpdate={handleUpdate}
+                                            onRemove={handleRemove}
+                                            canRemove={subjects.length > 1}
+                                          />
+                                        ),
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <p
+                                    className="py-4 text-center text-xs"
+                                    style={{
+                                      color: "var(--gp-text-muted)",
+                                    }}
                                   >
-                                    {/* Column headers - desktop only */}
-                                    {semSubjects.length > 0 && (
-                                      <div
-                                        className="hidden sm:grid gap-2 mb-2 px-1 text-xs font-semibold"
-                                        style={{
-                                          gridTemplateColumns:
-                                            "28px 1fr 72px 90px 28px",
-                                          color: "var(--gp-text-muted)",
-                                        }}
-                                      >
-                                        <div className="text-center">#</div>
-                                        <div>Subject Name</div>
-                                        <div className="text-center">
-                                          Credit
-                                        </div>
-                                        <div>Grade</div>
-                                        <div />
-                                      </div>
-                                    )}
+                                    No subjects added to this semester.
+                                  </p>
+                                )}
 
-                                    {semSubjects.length === 0 && (
-                                      <p
-                                        className="text-center text-sm py-3"
-                                        style={{
-                                          color: "var(--gp-text-muted)",
-                                        }}
-                                      >
-                                        No subjects yet for this semester.
-                                      </p>
-                                    )}
-
-                                    {semSubjects.map((s, i) => (
-                                      <SubjectRow
-                                        key={s.id}
-                                        subject={s}
-                                        index={i}
-                                        onUpdate={handleUpdate}
-                                        onRemove={handleRemove}
-                                        canRemove={subjects.length > 1}
-                                      />
-                                    ))}
-
-                                    {/* Add to this semester */}
-                                    <motion.button
-                                      whileHover={{ scale: 1.01 }}
-                                      whileTap={{ scale: 0.98 }}
-                                      onClick={() => handleAddToSemester(sem)}
-                                      className="flex items-center gap-2 px-3 py-2 mt-1 rounded-xl text-xs font-medium w-full sm:w-auto"
-                                      style={{
-                                        background: "var(--gp-primary-bg)",
-                                        color: "#4f46e5",
-                                        border: "1px dashed #818cf8",
-                                      }}
-                                    >
-                                      <Plus size={13} /> Add to {semLabel}
-                                    </motion.button>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddToSemester(semester)}
+                                  className="gp-btn gp-btn-secondary w-full sm:w-auto"
+                                >
+                                  <Plus size={16} />
+                                  Add Subject
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -564,273 +731,172 @@ export default function CalculatorPage() {
                   ),
                 )}
 
-                {/* Reset at bottom */}
-                <div className="mt-4">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleReset}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
-                    style={{
-                      background: "var(--gp-surface-2)",
-                      color: "var(--gp-text-muted)",
-                      border: "1px solid var(--gp-border)",
-                    }}
-                  >
-                    <RotateCcw size={13} /> Reset All
-                  </motion.button>
-                </div>
-              </>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="gp-btn gp-btn-secondary"
+                >
+                  <RotateCcw size={16} />
+                  Reset All
+                </button>
+              </div>
             )}
-          </div>
+          </section>
         </div>
 
-        {/* RIGHT PANEL - desktop only */}
-        <div className="hidden lg:flex flex-col space-y-4">
-          {/* CGPA CARD */}
-          <div className="gp-card p-6 text-center">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ background: "#eef2ff", color: "#4f46e5" }}
-            >
-              <Calculator size={24} />
-            </div>
-            <p
-              className="text-xs font-semibold uppercase tracking-widest mb-2"
-              style={{ color: "var(--gp-text-muted)" }}
-            >
-              Current CGPA
-            </p>
-            <motion.p
-              key={cgpa}
-              initial={{ scale: 0.9, opacity: 0.5 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="text-6xl font-bold mb-1"
-              style={{ fontFamily: "var(--font-display)", color: cgpaColor }}
-            >
-              {cgpa.toFixed(2)}
-            </motion.p>
-            <p className="text-xs" style={{ color: "var(--gp-text-muted)" }}>
-              out of 4.00
-            </p>
-            <div
-              className="mt-4 h-2 rounded-full overflow-hidden"
-              style={{ background: "var(--gp-surface-2)" }}
-            >
-              <motion.div
-                className="h-full rounded-full"
-                style={{
-                  background: `linear-gradient(90deg, ${cgpaColor}, ${cgpaColor}88)`,
-                }}
-                animate={{ width: `${(cgpa / 4) * 100}%` }}
-                transition={{ duration: 0.8 }}
-              />
-            </div>
-          </div>
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-[88px]">
+          <ResultCard cgpa={cgpa} totalCredits={totalCredits} />
 
-          {/* SUMMARY */}
-          <div className="gp-card p-5 space-y-3">
-            <h4
-              className="font-semibold text-sm"
-              style={{ color: "var(--gp-text)" }}
-            >
-              Summary
-            </h4>
-            {[
-              ["Total Credits", totalCredits],
-              ["Subjects", subjects.filter((s) => s.name).length],
-              [
-                "Failed",
-                subjects.filter((s) => s.grade === "F" && s.name).length,
-              ],
-              [
-                "Avg GPA",
-                (() => {
-                  const v = subjects.filter((s) => s.name && s.grade);
-                  return v.length
-                    ? (
-                        v.reduce(
-                          (a, s) => a + (GRADE_POINTS[s.grade] || 0),
-                          0,
-                        ) / v.length
-                      ).toFixed(2)
-                    : "—";
-                })(),
-              ],
-            ].map(([k, v]) => (
-              <div key={k} className="flex justify-between text-sm">
-                <span style={{ color: "var(--gp-text-muted)" }}>{k}</span>
-                <span
-                  className="font-semibold"
-                  style={{
-                    color:
-                      k === "Failed" && v > 0 ? "#ef4444" : "var(--gp-text)",
-                  }}
-                >
-                  {v}
-                </span>
-              </div>
-            ))}
-          </div>
+          <SummaryCard subjects={subjects} totalCredits={totalCredits} />
 
-          {/* Year-wise GPA breakdown when in year mode */}
           {viewMode === "year" && (
-            <div className="gp-card p-5 space-y-3">
-              <h4
-                className="font-semibold text-sm"
+            <section className="gp-card p-5">
+              <h2
+                className="text-sm font-semibold"
                 style={{ color: "var(--gp-text)" }}
               >
-                All Years GPA
-              </h4>
-              {YEAR_GROUPS.map((yr) => {
-                const yrSubjects = subjects.filter((s) =>
-                  yr.semesters.includes(
-                    s.yearSemester || "1st Year - 1st Semester",
-                  ),
-                );
-                const valid = yrSubjects.filter((s) => s.name && s.grade);
-                if (!valid.length) return null;
-                const ws = valid.reduce(
-                  (sum, s) => sum + (GRADE_POINTS[s.grade] || 0) * s.credit,
-                  0,
-                );
-                const tc = valid.reduce((sum, s) => sum + Number(s.credit), 0);
-                const gpa = tc ? parseFloat((ws / tc).toFixed(2)) : 0;
-                const color = gpaColor(gpa);
-                return (
-                  <div key={yr.label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span style={{ color: "var(--gp-text-muted)" }}>
-                        {yr.label}
-                      </span>
-                      <span className="font-bold" style={{ color }}>
-                        {gpa.toFixed(2)}
-                      </span>
+                Year-wise GPA
+              </h2>
+
+              <div className="mt-5 space-y-4">
+                {YEAR_GROUPS.map((year) => {
+                  const yearSubjects = subjects.filter((subject) =>
+                    year.semesters.includes(
+                      subject.yearSemester || "1st Year - 1st Semester",
+                    ),
+                  );
+
+                  const stats = getSemesterStats(yearSubjects);
+
+                  if (!stats.count) return null;
+
+                  return (
+                    <div key={year.label}>
+                      <div className="mb-1.5 flex items-center justify-between text-xs">
+                        <span
+                          style={{
+                            color: "var(--gp-text-muted)",
+                          }}
+                        >
+                          {year.label}
+                        </span>
+
+                        <span
+                          className="font-semibold"
+                          style={{
+                            color: getGpaColor(stats.gpa),
+                          }}
+                        >
+                          {stats.gpa.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div
+                        className="h-1.5 overflow-hidden rounded-full"
+                        style={{
+                          background: "var(--gp-surface-2)",
+                        }}
+                      >
+                        <div
+                          className="h-full rounded-full transition-[width] duration-300"
+                          style={{
+                            width: `${Math.min(100, (stats.gpa / 4) * 100)}%`,
+                            background: getGpaColor(stats.gpa),
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div
-                      className="h-1.5 rounded-full overflow-hidden"
-                      style={{ background: "var(--gp-surface-2)" }}
-                    >
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ background: color }}
-                        animate={{ width: `${(gpa / 4) * 100}%` }}
-                        transition={{ duration: 0.7 }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </section>
           )}
 
-          {/* EXPORT BUTTONS */}
-          <div className="space-y-2">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleExportPDF}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white"
-              style={{
-                background: "linear-gradient(135deg, #4f46e5, #6366f1)",
-              }}
-            >
-              <Download size={15} />
-              Export PDF Report
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleExportImage}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm"
-              style={{
-                background: "var(--gp-surface-2)",
-                color: "var(--gp-text)",
-                border: "1px solid var(--gp-border)",
-              }}
-            >
-              <Image size={15} />
-              Export as Image (PNG)
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Mobile: summary + export */}
-        <div className="lg:hidden space-y-3">
-          <div className="gp-card p-4 space-y-3">
-            <h4
-              className="font-semibold text-sm"
+          <section className="gp-card p-5">
+            <h2
+              className="text-sm font-semibold"
               style={{ color: "var(--gp-text)" }}
             >
-              Summary
-            </h4>
-            <div className="grid grid-cols-2 gap-y-2">
-              {[
-                ["Total Credits", totalCredits],
-                ["Subjects", subjects.filter((s) => s.name).length],
-                [
-                  "Failed",
-                  subjects.filter((s) => s.grade === "F" && s.name).length,
-                ],
-                [
-                  "Avg GPA",
-                  (() => {
-                    const v = subjects.filter((s) => s.name && s.grade);
-                    return v.length
-                      ? (
-                          v.reduce(
-                            (a, s) => a + (GRADE_POINTS[s.grade] || 0),
-                            0,
-                          ) / v.length
-                        ).toFixed(2)
-                      : "—";
-                  })(),
-                ],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between text-sm">
-                  <span style={{ color: "var(--gp-text-muted)" }}>{k}</span>
-                  <span
-                    className="font-semibold ml-2"
-                    style={{
-                      color:
-                        k === "Failed" && v > 0 ? "#ef4444" : "var(--gp-text)",
-                    }}
-                  >
-                    {v}
-                  </span>
-                </div>
-              ))}
+              Export Your Result
+            </h2>
+
+            <p
+              className="mt-1 text-xs"
+              style={{
+                color: "var(--gp-text-muted)",
+              }}
+            >
+              Download your academic summary.
+            </p>
+
+            <div className="mt-5 space-y-3">
+              <button
+                type="button"
+                onClick={handleExportPDF}
+                disabled={!hasAcademicData}
+                className="gp-btn gp-btn-primary w-full"
+              >
+                <Download size={17} />
+                Export PDF Report
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportImage}
+                disabled={!hasAcademicData}
+                className="gp-btn gp-btn-secondary w-full"
+              >
+                <Image size={17} />
+                Export as PNG
+              </button>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleExportPDF}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm text-white"
+          </section>
+
+          <div
+            className="rounded-2xl border p-5"
+            style={{
+              background: "var(--gp-primary-bg)",
+              borderColor: "var(--gp-border)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <TrendingUp
+                size={18}
+                style={{
+                  color: "var(--gp-primary)",
+                }}
+              />
+
+              <h3
+                className="text-sm font-semibold"
+                style={{ color: "var(--gp-text)" }}
+              >
+                Plan Your Next Result
+              </h3>
+            </div>
+
+            <p
+              className="mt-3 text-xs leading-relaxed"
               style={{
-                background: "linear-gradient(135deg, #4f46e5, #6366f1)",
+                color: "var(--gp-text-secondary)",
               }}
             >
-              <Download size={15} /> PDF
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleExportImage}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm"
+              Explore how your future grades could influence your academic
+              performance.
+            </p>
+
+            <Link
+              to="/prediction"
+              className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold"
               style={{
-                background: "var(--gp-surface-2)",
-                color: "var(--gp-text)",
-                border: "1px solid var(--gp-border)",
+                color: "var(--gp-primary)",
               }}
             >
-              <Image size={15} /> Image
-            </motion.button>
+              Explore Prediction
+              <ArrowRight size={15} />
+            </Link>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );
