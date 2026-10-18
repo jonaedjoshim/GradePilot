@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Trash2 } from "lucide-react";
-import { GRADE_LIST, GRADE_MARKS } from "../../data/gradeData";
+import { GRADE_LIST, GRADE_POINTS } from "../../data/gradeData";
 
 function SubjectRow({ subject, index, onUpdate, onRemove, canRemove = true }) {
   const handleChange = (field) => (event) => {
@@ -14,7 +14,7 @@ function SubjectRow({ subject, index, onUpdate, onRemove, canRemove = true }) {
 
   return (
     <div
-      className="grid min-w-0 grid-cols-1 gap-3 rounded-xl border p-3 sm:grid-cols-[32px_minmax(0,1fr)_88px_112px_36px] sm:items-center sm:gap-2 sm:border-transparent sm:px-2 sm:py-2"
+      className="grid min-w-0 grid-cols-1 gap-3 rounded-xl border p-3 sm:grid-cols-[32px_minmax(0,1fr)_90px_150px_40px] sm:items-center sm:gap-3 sm:border-transparent sm:px-2 sm:py-2"
       style={{
         background: "var(--gp-surface)",
         borderColor: "var(--gp-border)",
@@ -50,8 +50,8 @@ function SubjectRow({ subject, index, onUpdate, onRemove, canRemove = true }) {
           value={subject.name ?? ""}
           onChange={handleChange("name")}
           placeholder="e.g. Mathematics"
-          className="gp-input"
           autoComplete="off"
+          className="gp-input"
         />
       </div>
 
@@ -86,7 +86,7 @@ function SubjectRow({ subject, index, onUpdate, onRemove, canRemove = true }) {
           >
             {GRADE_LIST.map((grade) => (
               <option key={grade} value={grade}>
-                {grade} ({GRADE_MARKS[grade]})
+                {grade} · {GRADE_POINTS[grade].toFixed(2)}
               </option>
             ))}
           </select>

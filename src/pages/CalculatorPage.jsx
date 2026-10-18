@@ -744,7 +744,7 @@ export default function CalculatorPage() {
           </section>
         </div>
 
-        <aside className="min-w-0 space-y-5 xl:sticky xl:top-[88px]">
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-22">
           <ResultCard cgpa={cgpa} totalCredits={totalCredits} />
 
           <SummaryCard subjects={subjects} totalCredits={totalCredits} />
