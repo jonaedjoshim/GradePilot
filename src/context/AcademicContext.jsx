@@ -1,23 +1,40 @@
-import { createContext, useContext, useReducer, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+} from "react";
 
 import { DEFAULT_SUBJECT } from "../data/gradeData";
 import { calculateCGPA } from "../lib/calculations";
 
+import {
+  loadAcademicState,
+  saveAcademicState,
+  validateAcademicState,
+} from "../lib/storage";
+
 const AcademicContext = createContext(null);
 
-const initialState = {
-  subjects: [DEFAULT_SUBJECT(), DEFAULT_SUBJECT(), DEFAULT_SUBJECT()],
-  previousCGPA: "",
-  previousCredits: "",
-  targetCGPA: "",
-  remainingCredits: "",
-  theme: "light",
-  sidebarCollapsed: false,
-  aiInsights: null,
-  aiLoading: false,
-};
+function createInitialState() {
+  return {
+    subjects: [DEFAULT_SUBJECT(), DEFAULT_SUBJECT(), DEFAULT_SUBJECT()],
 
-function reducer(state, action) {
+    previousCGPA: "",
+    previousCredits: "",
+    targetCGPA: "",
+    remainingCredits: "",
+
+    theme: "light",
+    sidebarCollapsed: false,
+
+    aiInsights: null,
+    aiLoading: false,
+  };
+}
+
+function academicReducer(state, action) {
   switch (action.type) {
     case "SET_SUBJECTS":
       return {
@@ -50,7 +67,10 @@ function reducer(state, action) {
         ...state,
         subjects: state.subjects.map((subject) =>
           subject.id === action.payload.id
-            ? { ...subject, ...action.payload.data }
+            ? {
+                ...subject,
+                ...action.payload.data,
+              }
             : subject,
         ),
       };
@@ -85,6 +105,12 @@ function reducer(state, action) {
         theme: state.theme === "light" ? "dark" : "light",
       };
 
+    case "SET_THEME":
+      return {
+        ...state,
+        theme: action.payload,
+      };
+
     case "TOGGLE_SIDEBAR":
       return {
         ...state,
@@ -105,53 +131,17 @@ function reducer(state, action) {
       };
 
     case "LOAD_STATE":
-      return {
-        ...state,
-        ...action.payload,
-      };
+      return validateAcademicState(action.payload, createInitialState());
 
     case "RESET":
       return {
-        ...initialState,
-        subjects: [DEFAULT_SUBJECT(), DEFAULT_SUBJECT(), DEFAULT_SUBJECT()],
+        ...createInitialState(),
         theme: state.theme,
+        sidebarCollapsed: state.sidebarCollapsed,
       };
 
     default:
       return state;
-  }
-}
-
-function migrateSubjects(subjects) {
-  if (!Array.isArray(subjects)) {
-    return [];
-  }
-
-  return subjects.map((subject) => ({
-    yearSemester: "1st Year - 1st Semester",
-    ...subject,
-  }));
-}
-
-function loadSavedState(initial) {
-  try {
-    const saved = localStorage.getItem("gradepilot_state");
-
-    if (!saved) {
-      return initial;
-    }
-
-    const parsed = JSON.parse(saved);
-
-    return {
-      ...initial,
-      ...parsed,
-      subjects: migrateSubjects(parsed.subjects ?? initial.subjects),
-      aiInsights: null,
-      aiLoading: false,
-    };
-  } catch {
-    return initial;
   }
 }
 
@@ -160,30 +150,35 @@ export function computeCGPA(subjects, previousCGPA = "", previousCredits = "") {
 }
 
 export function AcademicProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, initialState, loadSavedState);
+  const [state, dispatch] = useReducer(academicReducer, undefined, () =>
+    loadAcademicState(createInitialState()),
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", state.theme);
   }, [state.theme]);
 
   useEffect(() => {
-    try {
-      const { aiInsights, aiLoading, ...persistedState } = state;
-
-      localStorage.setItem("gradepilot_state", JSON.stringify(persistedState));
-    } catch (error) {
-      console.error("Failed to save academic data:", error);
-    }
+    saveAcademicState(state);
   }, [state]);
 
-  const computed = calculateCGPA(
-    state.subjects,
-    state.previousCGPA,
-    state.previousCredits,
+  const computed = useMemo(
+    () =>
+      calculateCGPA(state.subjects, state.previousCGPA, state.previousCredits),
+    [state.subjects, state.previousCGPA, state.previousCredits],
+  );
+
+  const contextValue = useMemo(
+    () => ({
+      state,
+      dispatch,
+      computed,
+    }),
+    [state, computed],
   );
 
   return (
-    <AcademicContext.Provider value={{ state, dispatch, computed }}>
+    <AcademicContext.Provider value={contextValue}>
       {children}
     </AcademicContext.Provider>
   );
