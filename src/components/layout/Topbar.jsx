@@ -1,193 +1,248 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { NavLink } from "react-router";
-import {
-  Sun,
-  Moon,
-  Menu,
-  X,
-  GraduationCap,
-  LayoutDashboard,
-  Calculator,
-  TrendingUp,
-  Lightbulb,
-  BarChart2,
-  Info,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Link, NavLink, useLocation } from "react-router";
+import { GraduationCap, Menu, Moon, Sun, X, ChevronRight } from "lucide-react";
 import { useAcademic } from "../../hooks/useAcademic";
-
-const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/calculator", icon: Calculator, label: "Calculator" },
-  { to: "/prediction", icon: TrendingUp, label: "Prediction" },
-  { to: "/improvement", icon: Lightbulb, label: "Improvement" },
-  { to: "/insights", icon: BarChart2, label: "Insights" },
-  { to: "/about", icon: Info, label: "About" },
-];
+import { getCurrentPage, NAV_ITEMS } from "./navigation";
 
 export default function Topbar() {
   const { state, dispatch } = useAcademic();
+  const { pathname } = useLocation();
+
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const currentPage = getCurrentPage(pathname);
+  const isDark = state.theme === "dark";
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [mobileOpen]);
+
+  const toggleTheme = () => {
+    dispatch({ type: "TOGGLE_THEME" });
+  };
+
+  const closeMenu = () => {
+    setMobileOpen(false);
+  };
 
   return (
     <>
       <header
-        className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3"
+        className="sticky top-0 z-30 h-17 shrink-0 border-b"
         style={{
           background: "var(--gp-surface)",
-          borderBottom: "1px solid var(--gp-border)",
-          backdropFilter: "blur(12px)",
+          borderColor: "var(--gp-border)",
         }}
       >
-        <div className="flex items-center gap-2">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #4f46e5, #818cf8)" }}
-          >
-            <GraduationCap size={16} color="white" />
+        <div className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open navigation menu"
+              aria-expanded={mobileOpen}
+              aria-controls="mobile-navigation"
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl border lg:hidden"
+              style={{
+                borderColor: "var(--gp-border)",
+                color: "var(--gp-text)",
+              }}
+            >
+              <Menu size={20} />
+            </button>
+
+            <div className="min-w-0">
+              <div
+                className="hidden items-center gap-2 text-xs sm:flex"
+                style={{ color: "var(--gp-text-muted)" }}
+              >
+                <span>Workspace</span>
+                <ChevronRight size={13} />
+                <span className="truncate">{currentPage.label}</span>
+              </div>
+
+              <h1
+                className="m-0 truncate text-base font-semibold tracking-tight sm:mt-0.5 sm:text-lg"
+                style={{ color: "var(--gp-text)" }}
+              >
+                {currentPage.label}
+              </h1>
+            </div>
           </div>
-          <span
-            className="font-bold text-base"
-            style={{
-              fontFamily: "var(--font-display)",
-              color: "var(--gp-text)",
-            }}
-          >
-            GradePilot
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => dispatch({ type: "TOGGLE_THEME" })}
-            className="p-2 rounded-lg transition-colors"
-            style={{ color: "var(--gp-text-muted)" }}
-          >
-            {state.theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="p-2 rounded-lg"
-            style={{ color: "var(--gp-text)" }}
-          >
-            <Menu size={20} />
-          </button>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <span
+              className="hidden rounded-full border px-3 py-1 text-[11px] font-medium md:inline-flex"
+              style={{
+                borderColor: "var(--gp-border)",
+                color: "var(--gp-text-muted)",
+                background: "var(--gp-surface-2)",
+              }}
+            >
+              Academic Workspace
+            </span>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={
+                isDark ? "Switch to light mode" : "Switch to dark mode"
+              }
+              title={isDark ? "Light mode" : "Dark mode"}
+              className="flex size-10 items-center justify-center rounded-xl border transition-colors hover:bg-(--gp-surface-2)"
+              style={{
+                borderColor: "var(--gp-border)",
+                color: "var(--gp-text-secondary)",
+              }}
+            >
+              {isDark ? <Sun size={19} /> : <Moon size={19} />}
+            </button>
+
+            <div
+              className="flex size-9 items-center justify-center rounded-full border text-xs font-bold"
+              style={{
+                background: "var(--gp-primary-bg)",
+                borderColor: "var(--gp-border)",
+                color: "var(--gp-primary)",
+              }}
+              title="Guest workspace"
+            >
+              GP
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Desktop theme toggle in topbar area */}
-      <div
-        className="hidden lg:flex items-center justify-end px-6 py-3 sticky top-0 z-30"
-        style={{
-          background: "var(--gp-bg)",
-          borderBottom: "1px solid var(--gp-border)",
-        }}
-      >
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => dispatch({ type: "TOGGLE_THEME" })}
-          className="p-2 rounded-xl transition-colors"
-          style={{
-            background: "var(--gp-surface)",
-            border: "1px solid var(--gp-border)",
-            color: "var(--gp-text-muted)",
-          }}
-        >
-          {state.theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
-        </motion.button>
-      </div>
-
-      {/* Mobile drawer */}
       <AnimatePresence>
         {mobileOpen && (
-          <>
-            <motion.div
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <motion.button
+              type="button"
+              aria-label="Close navigation menu"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              className="fixed inset-0 z-50"
-              style={{
-                background: "rgba(0,0,0,0.4)",
-                backdropFilter: "blur(4px)",
-              }}
+              onClick={closeMenu}
+              className="absolute inset-0 h-full w-full bg-slate-950/50 backdrop-blur-[3px]"
             />
-            <motion.div
+
+            <motion.aside
+              id="mobile-navigation"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Mobile navigation"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed left-0 top-0 bottom-0 z-50 w-72 flex flex-col"
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="absolute inset-y-0 left-0 flex w-[min(320px,85vw)] flex-col border-r shadow-2xl"
               style={{
                 background: "var(--gp-surface)",
-                boxShadow: "4px 0 24px rgba(0,0,0,0.12)",
+                borderColor: "var(--gp-border)",
               }}
             >
               <div
-                className="flex items-center justify-between px-5 py-4 border-b"
+                className="flex h-19 items-center justify-between border-b px-5"
                 style={{ borderColor: "var(--gp-border)" }}
               >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{
-                      background: "linear-gradient(135deg, #4f46e5, #818cf8)",
-                    }}
-                  >
-                    <GraduationCap size={16} color="white" />
+                <Link
+                  to="/"
+                  onClick={closeMenu}
+                  className="flex items-center gap-3"
+                >
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                    <GraduationCap size={22} />
                   </div>
-                  <span
-                    className="font-bold"
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      color: "var(--gp-text)",
-                    }}
-                  >
-                    GradePilot
-                  </span>
-                </div>
+
+                  <div>
+                    <span
+                      className="block text-base font-bold"
+                      style={{ color: "var(--gp-text)" }}
+                    >
+                      GradePilot
+                    </span>
+                    <span
+                      className="block text-[10px]"
+                      style={{ color: "var(--gp-text-muted)" }}
+                    >
+                      Academic Workspace
+                    </span>
+                  </div>
+                </Link>
+
                 <button
-                  onClick={() => setMobileOpen(false)}
-                  style={{ color: "var(--gp-text-muted)" }}
+                  type="button"
+                  onClick={closeMenu}
+                  aria-label="Close navigation"
+                  className="flex size-9 items-center justify-center rounded-lg hover:bg-(--gp-surface-2)"
+                  style={{ color: "var(--gp-text)" }}
                 >
                   <X size={20} />
                 </button>
               </div>
-              <nav className="flex-1 p-4 space-y-1">
-                {NAV_ITEMS.map(({ to, icon: Icon, label }, i) => (
-                  <motion.div
-                    key={to}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
+
+              <div className="flex-1 overflow-y-auto p-4">
+                <p
+                  className="mb-3 px-3 text-[10px] font-bold tracking-[0.15em] uppercase"
+                  style={{ color: "var(--gp-text-muted)" }}
+                >
+                  Navigation
+                </p>
+
+                <nav aria-label="Mobile main navigation" className="space-y-1">
+                  {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
                     <NavLink
+                      key={to}
                       to={to}
                       end={to === "/"}
-                      onClick={() => setMobileOpen(false)}
+                      onClick={closeMenu}
+                      className="flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors"
+                      style={({ isActive }) => ({
+                        background: isActive
+                          ? "var(--gp-primary-bg)"
+                          : "transparent",
+                        color: isActive
+                          ? "var(--gp-primary)"
+                          : "var(--gp-text-muted)",
+                      })}
                     >
-                      {({ isActive }) => (
-                        <div
-                          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? "text-white" : ""}`}
-                          style={
-                            isActive
-                              ? {
-                                  background:
-                                    "linear-gradient(135deg, #4f46e5, #6366f1)",
-                                }
-                              : { color: "var(--gp-text-muted)" }
-                          }
-                        >
-                          <Icon size={20} />
-                          <span className="font-medium text-sm">{label}</span>
-                        </div>
-                      )}
+                      <Icon size={20} />
+                      <span>{label}</span>
                     </NavLink>
-                  </motion.div>
-                ))}
-              </nav>
-            </motion.div>
-          </>
+                  ))}
+                </nav>
+              </div>
+
+              <div
+                className="border-t px-6 py-5"
+                style={{ borderColor: "var(--gp-border)" }}
+              >
+                <p
+                  className="text-xs font-medium"
+                  style={{ color: "var(--gp-text-muted)" }}
+                >
+                  Plan better. Perform better.
+                </p>
+              </div>
+            </motion.aside>
+          </div>
         )}
       </AnimatePresence>
     </>

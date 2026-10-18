@@ -1,156 +1,179 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { NavLink } from "react-router";
 import {
-  LayoutDashboard,
-  Calculator,
-  TrendingUp,
-  Lightbulb,
-  BarChart2,
-  Info,
   ChevronLeft,
+  ChevronRight,
   GraduationCap,
+  PanelLeftClose,
 } from "lucide-react";
 import { useAcademic } from "../../hooks/useAcademic";
-import clsx from "clsx";
-
-const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/calculator", icon: Calculator, label: "Calculator" },
-  { to: "/prediction", icon: TrendingUp, label: "Prediction" },
-  { to: "/improvement", icon: Lightbulb, label: "Improvement" },
-  { to: "/insights", icon: BarChart2, label: "Insights" },
-  { to: "/about", icon: Info, label: "About" },
-];
+import { NAV_ITEMS } from "./navigation";
 
 export default function Sidebar() {
   const { state, dispatch } = useAcademic();
-  const { sidebarCollapsed } = state;
+  const collapsed = state.sidebarCollapsed;
 
-  const toggleSidebar = () => dispatch({ type: "TOGGLE_SIDEBAR" });
+  const toggleSidebar = () => {
+    dispatch({ type: "TOGGLE_SIDEBAR" });
+  };
 
   return (
     <motion.aside
-      animate={{ width: sidebarCollapsed ? 72 : 260 }}
-      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      className="hidden lg:flex flex-col sticky top-0 overflow-hidden cursor-pointer select-none"
+      initial={false}
+      animate={{ width: collapsed ? 76 : 256 }}
+      transition={{ duration: 0.22, ease: "easeInOut" }}
+      className="sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r lg:flex"
       style={{
         background: "var(--gp-surface)",
-        borderRight: "1px solid var(--gp-border)",
-        flexShrink: 0,
-        height: "100vh",
+        borderColor: "var(--gp-border)",
       }}
-      onClick={toggleSidebar}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 min-h-18">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg, #4f46e5, #818cf8)" }}
+      <div className="flex h-19 shrink-0 items-center gap-3 px-4.5">
+        <NavLink
+          to="/"
+          title={collapsed ? "GradePilot Dashboard" : undefined}
+          className="flex min-w-0 items-center gap-3"
         >
-          <GraduationCap size={24} color="white" />
-        </div>
-        <AnimatePresence>
-          {!sidebarCollapsed && (
-            <motion.span
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.2 }}
-              className="font-bold text-xl whitespace-nowrap"
-              style={{
-                fontFamily: "var(--font-display)",
-                color: "var(--gp-text)",
-              }}
-            >
-              GradePilot
-            </motion.span>
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+            <GraduationCap size={23} strokeWidth={2} />
+          </div>
+
+          {!collapsed && (
+            <div className="min-w-0">
+              <span
+                className="block text-[17px] font-bold tracking-tight"
+                style={{ color: "var(--gp-text)" }}
+              >
+                GradePilot
+              </span>
+              <span
+                className="block text-[10px] font-medium tracking-[0.13em] uppercase"
+                style={{ color: "var(--gp-text-muted)" }}
+              >
+                Academic Workspace
+              </span>
+            </div>
           )}
-        </AnimatePresence>
+        </NavLink>
       </div>
 
-      {/* Nav items */}
-      <nav className="flex-1 px-3 py-2 space-y-1">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            onClick={(e) => e.stopPropagation()} // don't toggle sidebar on nav click
-          >
-            {({ isActive }) => (
-              <motion.div
-                whileHover={{ x: 2 }}
-                whileTap={{ scale: 0.97 }}
-                className={clsx(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                  isActive ? "text-white shadow-md" : "hover:bg-opacity-60",
-                )}
-                style={
-                  isActive
-                    ? {
-                        background: "linear-gradient(135deg, #4f46e5, #6366f1)",
-                        cursor: "pointer",
-                      }
-                    : { color: "var(--gp-text-muted)", cursor: "pointer" }
-                }
-                onMouseEnter={(e) => {
-                  if (!isActive)
-                    e.currentTarget.style.background = "var(--gp-surface-2)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive)
-                    e.currentTarget.style.background = "transparent";
-                }}
-              >
-                <Icon size={20} className="shrink-0" />
-                <AnimatePresence>
-                  {!sidebarCollapsed && (
-                    <motion.span
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="text-sm font-medium whitespace-nowrap"
-                    >
-                      {label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </NavLink>
-        ))}
-      </nav>
+      <div
+        className="mx-4 border-t"
+        style={{ borderColor: "var(--gp-border)" }}
+      />
 
-      {/* Collapse indicator at bottom */}
-      <div className="p-3 border-t" style={{ borderColor: "var(--gp-border)" }}>
-        <div
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm transition-colors"
-          style={{ color: "var(--gp-text-muted)" }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "var(--gp-surface-2)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "transparent")
-          }
-        >
-          <motion.div
-            animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
-            transition={{ duration: 0.3 }}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-6">
+        {!collapsed && (
+          <p
+            className="mb-3 px-3 text-[10px] font-bold tracking-[0.15em] uppercase"
+            style={{ color: "var(--gp-text-muted)" }}
           >
-            <ChevronLeft size={16} />
-          </motion.div>
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+            Workspace
+          </p>
+        )}
+
+        <nav aria-label="Main navigation" className="space-y-1">
+          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              title={collapsed ? label : undefined}
+              className={({ isActive }) =>
+                `group relative flex h-11 items-center gap-3 rounded-xl text-[13px] font-medium transition-colors ${
+                  collapsed ? "justify-center px-2" : "px-3"
+                } ${isActive ? "font-semibold" : ""}`
+              }
+              style={({ isActive }) => ({
+                background: isActive ? "var(--gp-primary-bg)" : "transparent",
+                color: isActive ? "var(--gp-primary)" : "var(--gp-text-muted)",
+              })}
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <span
+                      className="absolute top-2 bottom-2 left-0 w-0.75 rounded-r-full"
+                      style={{ background: "var(--gp-primary)" }}
+                    />
+                  )}
+
+                  <Icon
+                    size={19}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                    className="shrink-0"
+                  />
+
+                  {!collapsed && (
+                    <span className="min-w-0 truncate">{label}</span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+
+      <div
+        className="shrink-0 border-t p-3"
+        style={{ borderColor: "var(--gp-border)" }}
+      >
+        {!collapsed && (
+          <div
+            className="mb-3 rounded-xl border p-3"
+            style={{
+              background: "var(--gp-surface-2)",
+              borderColor: "var(--gp-border)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="flex size-8 items-center justify-center rounded-lg"
+                style={{
+                  background: "var(--gp-primary-bg)",
+                  color: "var(--gp-primary)",
+                }}
               >
-                Collapse
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
+                <GraduationCap size={17} />
+              </div>
+
+              <div className="min-w-0">
+                <p
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--gp-text)" }}
+                >
+                  Your academic journey
+                </p>
+                <p
+                  className="mt-0.5 text-[11px]"
+                  style={{ color: "var(--gp-text-muted)" }}
+                >
+                  Plan. Track. Improve.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={`flex h-10 w-full items-center rounded-xl text-xs font-medium transition-colors hover:bg-(--gp-surface-2) ${
+            collapsed ? "justify-center" : "justify-between px-3"
+          }`}
+          style={{ color: "var(--gp-text-muted)" }}
+        >
+          {!collapsed && (
+            <span className="flex items-center gap-2">
+              <PanelLeftClose size={17} />
+              Collapse sidebar
+            </span>
+          )}
+
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={17} />}
+        </button>
       </div>
     </motion.aside>
   );
