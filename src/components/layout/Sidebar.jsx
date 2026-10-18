@@ -1,26 +1,32 @@
-import { motion, AnimatePresence } from 'framer-motion';
-import { Link, NavLink } from 'react-router';
+import { motion, AnimatePresence } from "framer-motion";
+import { NavLink } from "react-router";
 import {
-  LayoutDashboard, Calculator, TrendingUp, Lightbulb,
-  BarChart2, Info, ChevronLeft, GraduationCap
-} from 'lucide-react';
-import { useAcademic } from '../../context/AcademicContext';
-import clsx from 'clsx';
+  LayoutDashboard,
+  Calculator,
+  TrendingUp,
+  Lightbulb,
+  BarChart2,
+  Info,
+  ChevronLeft,
+  GraduationCap,
+} from "lucide-react";
+import { useAcademic } from "../../hooks/useAcademic";
+import clsx from "clsx";
 
 const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/calculator', icon: Calculator, label: 'Calculator' },
-  { to: '/prediction', icon: TrendingUp, label: 'Prediction' },
-  { to: '/improvement', icon: Lightbulb, label: 'Improvement' },
-  { to: '/insights', icon: BarChart2, label: 'Insights' },
-  { to: '/about', icon: Info, label: 'About' },
+  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/calculator", icon: Calculator, label: "Calculator" },
+  { to: "/prediction", icon: TrendingUp, label: "Prediction" },
+  { to: "/improvement", icon: Lightbulb, label: "Improvement" },
+  { to: "/insights", icon: BarChart2, label: "Insights" },
+  { to: "/about", icon: Info, label: "About" },
 ];
 
 export default function Sidebar() {
   const { state, dispatch } = useAcademic();
   const { sidebarCollapsed } = state;
 
-  const toggleSidebar = () => dispatch({ type: 'TOGGLE_SIDEBAR' });
+  const toggleSidebar = () => dispatch({ type: "TOGGLE_SIDEBAR" });
 
   return (
     <motion.aside
@@ -28,10 +34,10 @@ export default function Sidebar() {
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       className="hidden lg:flex flex-col sticky top-0 overflow-hidden cursor-pointer select-none"
       style={{
-        background: 'var(--gp-surface)',
-        borderRight: '1px solid var(--gp-border)',
+        background: "var(--gp-surface)",
+        borderRight: "1px solid var(--gp-border)",
         flexShrink: 0,
-        height: '100vh',
+        height: "100vh",
       }}
       onClick={toggleSidebar}
     >
@@ -39,7 +45,7 @@ export default function Sidebar() {
       <div className="flex items-center gap-3 px-4 py-5 min-h-18">
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: 'linear-gradient(135deg, #4f46e5, #818cf8)' }}
+          style={{ background: "linear-gradient(135deg, #4f46e5, #818cf8)" }}
         >
           <GraduationCap size={24} color="white" />
         </div>
@@ -51,7 +57,10 @@ export default function Sidebar() {
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.2 }}
               className="font-bold text-xl whitespace-nowrap"
-              style={{ fontFamily: 'var(--font-display)', color: 'var(--gp-text)' }}
+              style={{
+                fontFamily: "var(--font-display)",
+                color: "var(--gp-text)",
+              }}
             >
               GradePilot
             </motion.span>
@@ -65,7 +74,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === "/"}
             onClick={(e) => e.stopPropagation()} // don't toggle sidebar on nav click
           >
             {({ isActive }) => (
@@ -73,15 +82,25 @@ export default function Sidebar() {
                 whileHover={{ x: 2 }}
                 whileTap={{ scale: 0.97 }}
                 className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
-                  isActive ? 'text-white shadow-md' : 'hover:bg-opacity-60'
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                  isActive ? "text-white shadow-md" : "hover:bg-opacity-60",
                 )}
-                style={isActive
-                  ? { background: 'linear-gradient(135deg, #4f46e5, #6366f1)', cursor: 'pointer' }
-                  : { color: 'var(--gp-text-muted)', cursor: 'pointer' }
+                style={
+                  isActive
+                    ? {
+                        background: "linear-gradient(135deg, #4f46e5, #6366f1)",
+                        cursor: "pointer",
+                      }
+                    : { color: "var(--gp-text-muted)", cursor: "pointer" }
                 }
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--gp-surface-2)'; }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                onMouseEnter={(e) => {
+                  if (!isActive)
+                    e.currentTarget.style.background = "var(--gp-surface-2)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive)
+                    e.currentTarget.style.background = "transparent";
+                }}
               >
                 <Icon size={20} className="shrink-0" />
                 <AnimatePresence>
@@ -103,19 +122,30 @@ export default function Sidebar() {
       </nav>
 
       {/* Collapse indicator at bottom */}
-      <div className="p-3 border-t" style={{ borderColor: 'var(--gp-border)' }}>
+      <div className="p-3 border-t" style={{ borderColor: "var(--gp-border)" }}>
         <div
           className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm transition-colors"
-          style={{ color: 'var(--gp-text-muted)' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'var(--gp-surface-2)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          style={{ color: "var(--gp-text-muted)" }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.background = "var(--gp-surface-2)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.background = "transparent")
+          }
         >
-          <motion.div animate={{ rotate: sidebarCollapsed ? 180 : 0 }} transition={{ duration: 0.3 }}>
+          <motion.div
+            animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
+            transition={{ duration: 0.3 }}
+          >
             <ChevronLeft size={16} />
           </motion.div>
           <AnimatePresence>
             {!sidebarCollapsed && (
-              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
                 Collapse
               </motion.span>
             )}

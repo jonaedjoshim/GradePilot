@@ -1,21 +1,14 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useReducer,
-} from "react";
+import { useEffect, useMemo, useReducer } from "react";
 
 import { DEFAULT_SUBJECT } from "../data/gradeData";
 import { calculateCGPA } from "../lib/calculations";
+import { AcademicContext } from "./academicContextInstance";
 
 import {
   loadAcademicState,
   saveAcademicState,
   validateAcademicState,
 } from "../lib/storage";
-
-const AcademicContext = createContext(null);
 
 function createInitialState() {
   return {
@@ -145,10 +138,6 @@ function academicReducer(state, action) {
   }
 }
 
-export function computeCGPA(subjects, previousCGPA = "", previousCredits = "") {
-  return calculateCGPA(subjects, previousCGPA, previousCredits);
-}
-
 export function AcademicProvider({ children }) {
   const [state, dispatch] = useReducer(academicReducer, undefined, () =>
     loadAcademicState(createInitialState()),
@@ -182,14 +171,4 @@ export function AcademicProvider({ children }) {
       {children}
     </AcademicContext.Provider>
   );
-}
-
-export function useAcademic() {
-  const context = useContext(AcademicContext);
-
-  if (!context) {
-    throw new Error("useAcademic must be used inside AcademicProvider");
-  }
-
-  return context;
 }

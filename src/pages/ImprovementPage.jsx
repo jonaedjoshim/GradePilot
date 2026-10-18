@@ -7,7 +7,8 @@ import {
   CheckCircle,
 } from 'lucide-react';
 
-import { useAcademic, computeCGPA } from '../context/AcademicContext';
+import { useAcademic } from '../hooks/useAcademic';
+import { calculateCGPA } from '../lib/calculations';
 import { GRADE_POINTS } from '../data/gradeData';
 
 import toast from 'react-hot-toast';
@@ -53,7 +54,7 @@ export default function ImprovementPage() {
       return s;
     });
 
-    return computeCGPA(
+    return calculateCGPA(
       improved,
       previousCGPA,
       previousCredits

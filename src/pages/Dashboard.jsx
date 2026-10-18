@@ -1,8 +1,7 @@
-import { motion } from 'framer-motion';
-import { GraduationCap, BookOpen, Target, TrendingUp } from 'lucide-react';
-import { useAcademic } from '../context/AcademicContext';
-import StatCard from '../components/ui/StatCard';
-import { GRADE_POINTS } from '../data/gradeData';
+import { GraduationCap, BookOpen, Target, TrendingUp } from "lucide-react";
+import { useAcademic } from "../hooks/useAcademic";
+import StatCard from "../components/ui/StatCard";
+import { GRADE_POINTS } from "../data/gradeData";
 
 export default function Dashboard() {
   const { state, computed } = useAcademic();
@@ -11,19 +10,18 @@ export default function Dashboard() {
   const { subjects } = state;
 
   const validSubjects = Array.isArray(subjects)
-    ? subjects.filter(s => s?.name && s?.grade)
+    ? subjects.filter((s) => s?.name && s?.grade)
     : [];
 
   const avgGpa =
     validSubjects.length > 0
       ? validSubjects.reduce(
-        (acc, s) => acc + (GRADE_POINTS?.[s.grade] ?? 0),
-        0
-      ) / validSubjects.length
+          (acc, s) => acc + (GRADE_POINTS?.[s.grade] ?? 0),
+          0,
+        ) / validSubjects.length
       : 0;
 
   return (
-    // BUG FIX: was grid-cols-2 md:grid-cols-4, on small screens 2-col was too cramped
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       <StatCard
         icon={<GraduationCap size={22} />}
