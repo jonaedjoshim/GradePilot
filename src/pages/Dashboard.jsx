@@ -92,7 +92,7 @@ function OverviewCard({ icon: Icon, label, value, detail, accent }) {
         </p>
 
         <p
-          className="gp-tabular-nums mt-1.5 text-[28px] font-bold tracking-tight break-words"
+          className="gp-tabular-nums mt-1.5 text-[28px] font-bold tracking-tight wrap-break-word"
           style={{ color: "var(--gp-text)" }}
         >
           {value}
@@ -137,7 +137,7 @@ function QuickAction({ to, icon: Icon, title, description }) {
   return (
     <Link
       to={to}
-      className="group flex min-w-0 items-center gap-3 rounded-xl border p-3.5 transition-colors hover:bg-[var(--gp-surface-2)]"
+      className="group flex min-w-0 items-center gap-3 rounded-xl border p-3.5 transition-colors hover:bg-(--gp-surface-2)"
       style={{ borderColor: "var(--gp-border)" }}
     >
       <div

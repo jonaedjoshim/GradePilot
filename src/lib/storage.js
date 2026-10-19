@@ -26,8 +26,17 @@ const PERSISTED_FIELDS = [
   "sidebarCollapsed",
 ];
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function isValidNumber(value, min, max = Infinity) {
-  if (value === "" || value === null || value === undefined) {
+  if (
+    value === "" ||
+    value === null ||
+    value === undefined ||
+    typeof value === "boolean"
+  ) {
     return false;
   }
 
@@ -37,7 +46,11 @@ function isValidNumber(value, min, max = Infinity) {
 }
 
 function normalizeNumber(value, min, max = Infinity) {
-  return isValidNumber(value, min, max) ? String(value) : "";
+  if (!isValidNumber(value, min, max)) {
+    return "";
+  }
+
+  return String(Number(value));
 }
 
 function normalizePeriod(value, university) {
@@ -47,35 +60,48 @@ function normalizePeriod(value, university) {
     return value;
   }
 
-  if (university === UNIVERSITY_TYPES.NATIONAL) {
-    const year = periods.find((period) =>
-      String(value ?? "").startsWith(period),
+  if (university === UNIVERSITY_TYPES.NATIONAL && typeof value === "string") {
+    const matchingYear = periods.find((period) =>
+      value.startsWith(`${period} -`),
     );
 
-    if (year) {
-      return year;
+    if (matchingYear) {
+      return matchingYear;
     }
   }
 
   return getDefaultAcademicPeriod(university);
 }
 
+function createSubjectId() {
+  return crypto.randomUUID();
+}
+
 function normalizeSubject(subject, university) {
-  if (!subject || typeof subject !== "object" || Array.isArray(subject)) {
+  if (!isPlainObject(subject)) {
     return null;
   }
 
   const credit = Number(subject.credit);
 
+  const validCredit =
+    subject.credit !== null &&
+    subject.credit !== undefined &&
+    subject.credit !== "" &&
+    typeof subject.credit !== "boolean" &&
+    Number.isFinite(credit) &&
+    credit >= 0 &&
+    credit <= 30;
+
   return {
     id:
       typeof subject.id === "string" && subject.id.trim()
         ? subject.id
-        : crypto.randomUUID(),
+        : createSubjectId(),
 
     name: typeof subject.name === "string" ? subject.name.slice(0, 150) : "",
 
-    credit: Number.isFinite(credit) && credit >= 0 && credit <= 30 ? credit : 3,
+    credit: validCredit ? credit : 3,
 
     grade: Object.hasOwn(GRADE_POINTS, subject.grade) ? subject.grade : "B+",
 
@@ -88,34 +114,48 @@ export function normalizeSubjects(subjects, university = DEFAULT_UNIVERSITY) {
     return [];
   }
 
+  const normalizedSubjects = [];
   const seenIds = new Set();
 
-  return subjects.reduce((result, subject) => {
+  for (const subject of subjects) {
     const normalized = normalizeSubject(subject, university);
 
     if (!normalized) {
-      return result;
+      continue;
     }
 
     if (seenIds.has(normalized.id)) {
-      normalized.id = crypto.randomUUID();
+      normalized.id = createSubjectId();
     }
 
     seenIds.add(normalized.id);
+    normalizedSubjects.push(normalized);
+  }
 
-    return [...result, normalized];
-  }, []);
+  return normalizedSubjects;
+}
+
+function getDefaultProfile() {
+  return {
+    subjects: [],
+    previousCGPA: "",
+    previousCredits: "",
+    targetCGPA: "",
+    remainingCredits: "",
+  };
 }
 
 function normalizeProfile(profile, university, defaults) {
-  if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+  if (!isPlainObject(profile)) {
     return defaults;
   }
+
+  const fallback = defaults ?? getDefaultProfile();
 
   return {
     subjects: Array.isArray(profile.subjects)
       ? normalizeSubjects(profile.subjects, university)
-      : defaults.subjects,
+      : fallback.subjects,
 
     previousCGPA: normalizeNumber(profile.previousCGPA, 0, 4),
 
@@ -127,19 +167,30 @@ function normalizeProfile(profile, university, defaults) {
   };
 }
 
-function getDefaultProfile(university) {
-  return {
-    subjects: [],
-    previousCGPA: "",
-    previousCredits: "",
-    targetCGPA: "",
-    remainingCredits: "",
-    university,
-  };
+function normalizeUniversityProfiles(savedProfiles) {
+  if (!isPlainObject(savedProfiles)) {
+    return {};
+  }
+
+  const profiles = {};
+
+  for (const university of Object.values(UNIVERSITY_TYPES)) {
+    if (!isPlainObject(savedProfiles[university])) {
+      continue;
+    }
+
+    profiles[university] = normalizeProfile(
+      savedProfiles[university],
+      university,
+      getDefaultProfile(),
+    );
+  }
+
+  return profiles;
 }
 
 export function validateAcademicState(data, defaults) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
+  if (!isPlainObject(data)) {
     return defaults;
   }
 
@@ -147,34 +198,28 @@ export function validateAcademicState(data, defaults) {
     ? data.university
     : DEFAULT_UNIVERSITY;
 
-  const currentProfile = normalizeProfile(data, university, defaults);
+  const defaultProfile = {
+    subjects: defaults.subjects,
+    previousCGPA: defaults.previousCGPA,
+    previousCredits: defaults.previousCredits,
+    targetCGPA: defaults.targetCGPA,
+    remainingCredits: defaults.remainingCredits,
+  };
 
-  const savedProfiles =
-    data.universityProfiles &&
-    typeof data.universityProfiles === "object" &&
-    !Array.isArray(data.universityProfiles)
-      ? data.universityProfiles
-      : {};
-
-  const universityProfiles = {};
-
-  for (const type of Object.values(UNIVERSITY_TYPES)) {
-    if (savedProfiles[type]) {
-      universityProfiles[type] = normalizeProfile(
-        savedProfiles[type],
-        type,
-        getDefaultProfile(type),
-      );
-    }
-  }
+  const currentProfile = normalizeProfile(data, university, defaultProfile);
 
   return {
     ...defaults,
     ...currentProfile,
-    university,
-    universityProfiles,
 
-    theme: ["light", "dark"].includes(data.theme) ? data.theme : defaults.theme,
+    university,
+
+    universityProfiles: normalizeUniversityProfiles(data.universityProfiles),
+
+    theme:
+      data.theme === "light" || data.theme === "dark"
+        ? data.theme
+        : defaults.theme,
 
     sidebarCollapsed:
       typeof data.sidebarCollapsed === "boolean"
@@ -213,6 +258,10 @@ export function saveAcademicState(state) {
     return false;
   }
 
+  if (!isPlainObject(state)) {
+    return false;
+  }
+
   try {
     const data = {};
 
@@ -239,6 +288,7 @@ export function clearAcademicState() {
 
   try {
     window.localStorage.removeItem(STORAGE_KEY);
+
     return true;
   } catch {
     return false;
