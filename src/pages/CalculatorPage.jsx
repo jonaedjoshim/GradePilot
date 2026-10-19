@@ -23,7 +23,6 @@ import UniversitySelector from "../components/ui/UniversitySelector";
 import { GRADE_POINTS, DEFAULT_SUBJECT } from "../data/gradeData";
 import {
   getAcademicPeriods,
-  getDefaultAcademicPeriod,
   getUniversityConfig,
   UNIVERSITY_TYPES,
 } from "../data/universityData";
@@ -163,21 +162,6 @@ function ResultCard({ cgpa, totalCredits }) {
         <strong style={{ color: "var(--gp-text)" }}>{totalCredits}</strong>
       </div>
     </section>
-  );
-}
-
-function SubjectHeaders() {
-  return (
-    <div
-      className="hidden grid-cols-[32px_minmax(0,1fr)_90px_150px_40px] items-center gap-3 px-2 text-xs font-semibold sm:grid"
-      style={{ color: "var(--gp-text-muted)" }}
-    >
-      <span className="text-center">#</span>
-      <span>Subject Name</span>
-      <span className="text-center">Credits</span>
-      <span>Grade</span>
-      <span />
-    </div>
   );
 }
 
@@ -488,14 +472,13 @@ export default function CalculatorPage() {
 
             {viewMode === "list" ? (
               <div className="space-y-3">
-                <SubjectHeaders />
-
                 <div className="space-y-2">
                   {subjects.map((subject, index) => (
                     <SubjectRow
                       key={subject.id}
                       subject={subject}
                       index={index}
+                      university={university}
                       onUpdate={handleUpdate}
                       onRemove={handleRemove}
                       canRemove={subjects.length > 1}
@@ -527,15 +510,6 @@ export default function CalculatorPage() {
                     Reset All
                   </button>
                 </div>
-
-                <p
-                  className="text-xs"
-                  style={{ color: "var(--gp-text-muted)" }}
-                >
-                  New subjects are assigned to{" "}
-                  {getDefaultAcademicPeriod(university)}. Use {periodLabel} view
-                  to organize subjects by academic period.
-                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -609,22 +583,19 @@ export default function CalculatorPage() {
                       {!collapsed && (
                         <div className="space-y-3 p-3 sm:p-4">
                           {periodSubjects.length > 0 ? (
-                            <>
-                              <SubjectHeaders />
-
-                              <div className="space-y-2">
-                                {periodSubjects.map((subject, index) => (
-                                  <SubjectRow
-                                    key={subject.id}
-                                    subject={subject}
-                                    index={index}
-                                    onUpdate={handleUpdate}
-                                    onRemove={handleRemove}
-                                    canRemove={subjects.length > 1}
-                                  />
-                                ))}
-                              </div>
-                            </>
+                            <div className="space-y-2">
+                              {periodSubjects.map((subject, index) => (
+                                <SubjectRow
+                                  key={subject.id}
+                                  subject={subject}
+                                  index={index}
+                                  university={university}
+                                  onUpdate={handleUpdate}
+                                  onRemove={handleRemove}
+                                  canRemove={subjects.length > 1}
+                                />
+                              ))}
+                            </div>
                           ) : (
                             <p
                               className="py-4 text-center text-xs"
