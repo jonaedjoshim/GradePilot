@@ -1,290 +1,592 @@
-import { motion } from "framer-motion";
-import { AlertTriangle, Star, Play } from "lucide-react";
+import { Link } from "react-router";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Award,
+  BookOpen,
+  Calculator,
+  ChartNoAxesCombined,
+  CheckCircle2,
+  GraduationCap,
+  Info,
+  Lightbulb,
+  Target,
+  TrendingUp,
+} from "lucide-react";
 import { useAcademic } from "../hooks/useAcademic";
-import { useGeminiAI } from "../hooks/useGeminiAI";
-import AIInsightCard from "../components/ui/AIInsightCard";
+import { GRADE_POINTS } from "../data/gradeData";
 import {
   GPATrendChart,
   GradeDistributionChart,
   CreditAnalysisChart,
   YearSemesterChart,
 } from "../components/charts/AcademicCharts";
-import { GRADE_POINTS } from "../data/gradeData";
 
-export default function InsightsPage() {
-  const { state } = useAcademic();
-  const { subjects, aiInsights, aiLoading } = state;
-  const { analyzeAcademics } = useGeminiAI();
+function formatGPA(value) {
+  const number = Number(value);
 
-  const validSubjects = subjects.filter((s) => s.name && s.grade);
-  const weakSubjects = validSubjects.filter(
-    (s) => (GRADE_POINTS[s.grade] || 0) < 2.75,
+  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+}
+
+function getValidSubjects(subjects) {
+  if (!Array.isArray(subjects)) return [];
+
+  return subjects.filter(
+    (subject) =>
+      subject?.name?.trim() &&
+      Object.hasOwn(GRADE_POINTS, subject.grade) &&
+      Number(subject.credit) > 0,
   );
-  const strongSubjects = validSubjects.filter(
-    (s) => (GRADE_POINTS[s.grade] || 0) >= 3.5,
+}
+
+function MetricCard({ icon: Icon, label, value, description, color }) {
+  return (
+    <div className="gp-card min-w-0 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <p
+          className="text-xs font-medium"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
+          {label}
+        </p>
+
+        <div
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+          style={{
+            background: "var(--gp-primary-bg)",
+            color: color || "var(--gp-primary)",
+          }}
+        >
+          <Icon size={19} />
+        </div>
+      </div>
+
+      <p
+        className="gp-tabular-nums mt-4 text-2xl font-bold tracking-tight"
+        style={{ color: color || "var(--gp-text)" }}
+      >
+        {value}
+      </p>
+
+      <p className="mt-1 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+        {description}
+      </p>
+    </div>
   );
-  const failedSubjects = validSubjects.filter((s) => s.grade === "F");
+}
 
-  const performanceTrend = (() => {
-    if (validSubjects.length < 2) return "neutral";
-    const first = GRADE_POINTS[validSubjects[0].grade] || 0;
-    const last =
-      GRADE_POINTS[validSubjects[validSubjects.length - 1].grade] || 0;
-    return last > first ? "improving" : last < first ? "declining" : "stable";
-  })();
+function SectionHeading({ title, description, action }) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2
+          className="text-base font-semibold sm:text-lg"
+          style={{ color: "var(--gp-text)" }}
+        >
+          {title}
+        </h2>
 
-  const trendConfig = {
-    improving: {
-      color: "#10b981",
-      bg: "#ecfdf5",
-      label: "Improving",
-      icon: "📈",
+        <p
+          className="mt-1 text-xs sm:text-sm"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
+          {description}
+        </p>
+      </div>
+
+      {action && (
+        <Link
+          to={action.to}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold"
+          style={{ color: "var(--gp-primary)" }}
+        >
+          {action.label}
+          <ArrowRight size={14} />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function SubjectAnalysisCard({
+  title,
+  description,
+  icon: Icon,
+  subjects,
+  tone,
+  emptyMessage,
+}) {
+  const colors = {
+    success: {
+      text: "var(--gp-success)",
+      background: "var(--gp-success-bg)",
     },
-    declining: {
-      color: "#ef4444",
-      bg: "#fef2f2",
-      label: "Declining",
-      icon: "📉",
-    },
-    stable: { color: "#f59e0b", bg: "#fffbeb", label: "Stable", icon: "➡️" },
-    neutral: {
-      color: "#64748b",
-      bg: "var(--gp-surface-2)",
-      label: "Add More Data",
-      icon: "⏳",
+    warning: {
+      text: "var(--gp-warning)",
+      background: "var(--gp-warning-bg)",
     },
   };
-  const trend = trendConfig[performanceTrend];
+
+  const color = colors[tone];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:justify-between">
+    <section className="gp-card min-w-0 p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <div
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+          style={{
+            background: color.background,
+            color: color.text,
+          }}
+        >
+          <Icon size={19} />
+        </div>
+
         <div>
+          <h3
+            className="text-sm font-semibold sm:text-base"
+            style={{ color: "var(--gp-text)" }}
+          >
+            {title}
+          </h3>
+
+          <p className="mt-1 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+            {description}
+          </p>
+        </div>
+      </div>
+
+      {subjects.length === 0 ? (
+        <div
+          className="mt-5 flex min-h-32 items-center justify-center rounded-xl border border-dashed p-4 text-center text-xs"
+          style={{
+            borderColor: "var(--gp-border)",
+            color: "var(--gp-text-muted)",
+          }}
+        >
+          {emptyMessage}
+        </div>
+      ) : (
+        <div className="mt-5 space-y-2">
+          {subjects.map((subject) => (
+            <div
+              key={subject.id}
+              className="flex min-w-0 items-center justify-between gap-3 rounded-xl border p-3"
+              style={{ borderColor: "var(--gp-border)" }}
+            >
+              <div className="min-w-0">
+                <p
+                  className="truncate text-xs font-semibold sm:text-sm"
+                  style={{ color: "var(--gp-text)" }}
+                >
+                  {subject.name}
+                </p>
+
+                <p
+                  className="mt-1 text-[11px]"
+                  style={{ color: "var(--gp-text-muted)" }}
+                >
+                  {subject.credit} credits ·{" "}
+                  {formatGPA(GRADE_POINTS[subject.grade])} GPA
+                </p>
+              </div>
+
+              <span
+                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold"
+                style={{
+                  background: color.background,
+                  color: color.text,
+                }}
+              >
+                {subject.grade}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ChartCard({ title, description, children }) {
+  return (
+    <section className="gp-card min-w-0 p-5 sm:p-6">
+      <h3
+        className="text-sm font-semibold sm:text-base"
+        style={{ color: "var(--gp-text)" }}
+      >
+        {title}
+      </h3>
+
+      <p className="mt-1 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+        {description}
+      </p>
+
+      <div className="mt-5 min-w-0">{children}</div>
+    </section>
+  );
+}
+
+function SuggestionCard({ icon: Icon, title, description, tone = "primary" }) {
+  const toneColors = {
+    primary: {
+      background: "var(--gp-primary-bg)",
+      color: "var(--gp-primary)",
+    },
+    success: {
+      background: "var(--gp-success-bg)",
+      color: "var(--gp-success)",
+    },
+    warning: {
+      background: "var(--gp-warning-bg)",
+      color: "var(--gp-warning)",
+    },
+  };
+
+  const selected = toneColors[tone];
+
+  return (
+    <div
+      className="flex min-w-0 items-start gap-3 rounded-xl border p-4"
+      style={{ borderColor: "var(--gp-border)" }}
+    >
+      <div
+        className="flex size-10 shrink-0 items-center justify-center rounded-xl"
+        style={{
+          background: selected.background,
+          color: selected.color,
+        }}
+      >
+        <Icon size={19} />
+      </div>
+
+      <div className="min-w-0">
+        <h3
+          className="text-sm font-semibold"
+          style={{ color: "var(--gp-text)" }}
+        >
+          {title}
+        </h3>
+
+        <p
+          className="mt-1 text-xs leading-relaxed"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function InsightsPage() {
+  const { state, computed } = useAcademic();
+
+  const { subjects, university } = state;
+  const { cgpa, totalCredits } = computed;
+
+  const validSubjects = getValidSubjects(subjects);
+
+  const strongSubjects = validSubjects.filter(
+    (subject) => GRADE_POINTS[subject.grade] >= 3.5,
+  );
+
+  const weakSubjects = validSubjects.filter(
+    (subject) => GRADE_POINTS[subject.grade] < 2.75,
+  );
+
+  const failedSubjects = validSubjects.filter(
+    (subject) => subject.grade === "F",
+  );
+
+  const averageGpa = validSubjects.length
+    ? validSubjects.reduce(
+        (sum, subject) => sum + GRADE_POINTS[subject.grade],
+        0,
+      ) / validSubjects.length
+    : 0;
+
+  const weightedGpa = validSubjects.length
+    ? validSubjects.reduce(
+        (sum, subject) =>
+          sum + GRADE_POINTS[subject.grade] * Number(subject.credit),
+        0,
+      ) /
+      validSubjects.reduce((sum, subject) => sum + Number(subject.credit), 0)
+    : 0;
+
+  const periodLabel = university === "national" ? "Year-wise" : "Semester-wise";
+
+  const suggestions = [];
+
+  if (validSubjects.length === 0) {
+    suggestions.push({
+      icon: BookOpen,
+      title: "Start tracking your subjects",
+      description:
+        "Add your subjects, credits, and grades to unlock academic performance insights.",
+      tone: "primary",
+    });
+  } else {
+    if (failedSubjects.length > 0) {
+      suggestions.push({
+        icon: AlertTriangle,
+        title: "Prioritize failed subjects",
+        description: `You have ${failedSubjects.length} failed subject(s). Review your university's retake policies and prioritize these courses.`,
+        tone: "warning",
+      });
+    }
+
+    if (weakSubjects.length > 0) {
+      suggestions.push({
+        icon: Target,
+        title: "Focus on lower-performing subjects",
+        description: `${weakSubjects.length} subject(s) have grade points below 2.75. Improving performance in higher-credit subjects can have a greater impact on your CGPA.`,
+        tone: "warning",
+      });
+    }
+
+    if (strongSubjects.length > 0) {
+      suggestions.push({
+        icon: Award,
+        title: "Maintain your strong performance",
+        description: `You have ${strongSubjects.length} subject(s) with A- or higher. Maintain these strengths while improving weaker areas.`,
+        tone: "success",
+      });
+    }
+
+    if (weightedGpa < averageGpa) {
+      suggestions.push({
+        icon: TrendingUp,
+        title: "Pay attention to course credits",
+        description:
+          "Your credit-weighted GPA is lower than your simple average grade point. Higher-credit courses may need additional attention.",
+        tone: "primary",
+      });
+    }
+
+    if (cgpa >= 3.5 && failedSubjects.length === 0) {
+      suggestions.push({
+        icon: CheckCircle2,
+        title: "Strong overall academic standing",
+        description:
+          "Your current CGPA is at least 3.50. Continue tracking results and planning future academic goals.",
+        tone: "success",
+      });
+    }
+
+    if (suggestions.length === 0) {
+      suggestions.push({
+        icon: Lightbulb,
+        title: "Keep building consistent results",
+        description:
+          "Your academic records show a foundation to build on. Review your course performance regularly and set achievable GPA targets.",
+        tone: "primary",
+      });
+    }
+  }
+
+  return (
+    <div className="min-w-0 space-y-7 sm:space-y-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <span className="gp-badge gp-badge-primary mb-3">
+            <ChartNoAxesCombined size={14} />
+            Academic Analytics
+          </span>
+
           <h1
-            className="text-2xl font-bold"
-            style={{
-              fontFamily: "var(--font-display)",
-              color: "var(--gp-text)",
-            }}
+            className="text-2xl font-bold tracking-tight sm:text-[28px]"
+            style={{ color: "var(--gp-text)" }}
           >
             Academic Insights
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--gp-text-muted)" }}>
-            Deep analysis of your academic performance and risk factors.
+
+          <p
+            className="mt-2 max-w-2xl text-sm leading-relaxed"
+            style={{ color: "var(--gp-text-muted)" }}
+          >
+            Understand your academic strengths, identify areas for improvement,
+            and make informed decisions.
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={analyzeAcademics}
-          disabled={aiLoading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 self-start shrink-0"
-          style={{ background: "linear-gradient(135deg, #4f46e5, #6366f1)" }}
+
+        <Link to="/calculator" className="gp-btn gp-btn-secondary self-start">
+          <Calculator size={17} />
+          Manage Results
+        </Link>
+      </header>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={GraduationCap}
+          label="Current CGPA"
+          value={formatGPA(cgpa)}
+          description={`${totalCredits} completed credits`}
+        />
+
+        <MetricCard
+          icon={Award}
+          label="Strong Subjects"
+          value={strongSubjects.length}
+          description="A- or higher grades"
+          color="var(--gp-success)"
+        />
+
+        <MetricCard
+          icon={AlertTriangle}
+          label="Needs Attention"
+          value={weakSubjects.length}
+          description="Below B- grade point"
+          color="var(--gp-warning)"
+        />
+
+        <MetricCard
+          icon={Activity}
+          label="Failed Subjects"
+          value={failedSubjects.length}
+          description="Subjects with F grades"
+          color="var(--gp-danger)"
+        />
+      </section>
+
+      <section className="space-y-5">
+        <SectionHeading
+          title="Subject Performance"
+          description="Identify your strongest subjects and areas that need attention."
+        />
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <SubjectAnalysisCard
+            icon={Award}
+            title="Strong Subjects"
+            description="Subjects with A- or higher."
+            subjects={strongSubjects}
+            tone="success"
+            emptyMessage="No subjects with A- or higher recorded yet."
+          />
+
+          <SubjectAnalysisCard
+            icon={AlertTriangle}
+            title="Needs Attention"
+            description="Subjects with grade points below 2.75."
+            subjects={weakSubjects}
+            tone="warning"
+            emptyMessage="No lower-performing subjects identified."
+          />
+        </div>
+      </section>
+
+      <section className="space-y-5">
+        <SectionHeading
+          title="Academic Visualizations"
+          description="Explore your grades, credits, and academic periods."
+        />
+
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+          <ChartCard
+            title="Grade Distribution"
+            description="Distribution of grades across recorded subjects."
+          >
+            <GradeDistributionChart subjects={validSubjects} />
+          </ChartCard>
+
+          <ChartCard
+            title={`${periodLabel} Performance`}
+            description="Credit-weighted GPA for each academic period."
+          >
+            <YearSemesterChart subjects={validSubjects} />
+          </ChartCard>
+
+          <ChartCard
+            title="Subject GPA Comparison"
+            description="Subject grade points and running weighted GPA in entry order."
+          >
+            <GPATrendChart subjects={validSubjects} />
+          </ChartCard>
+
+          <ChartCard
+            title="Credit Distribution"
+            description="Compare credits assigned to individual subjects."
+          >
+            <CreditAnalysisChart subjects={validSubjects} />
+          </ChartCard>
+        </div>
+      </section>
+
+      <section className="space-y-5">
+        <SectionHeading
+          title="Academic Suggestions"
+          description="Personalized recommendations based on your recorded results."
+          action={{
+            to: "/prediction",
+            label: "Plan Your Target",
+          }}
+        />
+
+        <div className="gp-card p-5 sm:p-6">
+          <div
+            className="mb-5 flex items-start gap-3 rounded-xl p-4"
+            style={{
+              background: "var(--gp-primary-bg)",
+            }}
+          >
+            <Info
+              size={18}
+              className="mt-0.5 shrink-0"
+              style={{ color: "var(--gp-primary)" }}
+            />
+
+            <p
+              className="text-xs leading-relaxed"
+              style={{ color: "var(--gp-text-secondary)" }}
+            >
+              These suggestions are generated locally using academic calculation
+              rules. They do not require an AI API or Internet connection.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {suggestions.map((suggestion) => (
+              <SuggestionCard key={suggestion.title} {...suggestion} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+        style={{
+          background: "var(--gp-primary-bg)",
+          borderColor: "var(--gp-border)",
+        }}
+      >
+        <div>
+          <h2
+            className="text-base font-semibold"
+            style={{ color: "var(--gp-text)" }}
+          >
+            Ready to improve your academic performance?
+          </h2>
+
+          <p
+            className="mt-2 text-xs sm:text-sm"
+            style={{ color: "var(--gp-text-secondary)" }}
+          >
+            Explore hypothetical grade improvements and understand their
+            potential CGPA impact.
+          </p>
+        </div>
+
+        <Link
+          to="/improvement"
+          className="gp-btn gp-btn-primary shrink-0 self-start sm:self-auto"
         >
-          {aiLoading ? (
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Play size={15} />
-          )}
-          Run Analysis
-        </motion.button>
-      </div>
-
-      {/* Quick Metrics - BUG FIX: was grid-cols-2 md:grid-cols-4, fine but keep consistent */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          {
-            icon: "💪",
-            label: "Strong Subjects",
-            value: strongSubjects.length,
-            color: "#10b981",
-            bg: "#ecfdf5",
-          },
-          {
-            icon: "⚠️",
-            label: "Weak Subjects",
-            value: weakSubjects.length,
-            color: "#f59e0b",
-            bg: "#fffbeb",
-          },
-          {
-            icon: "❌",
-            label: "Failed",
-            value: failedSubjects.length,
-            color: "#ef4444",
-            bg: "#fef2f2",
-          },
-          {
-            icon: trend.icon,
-            label: "Trend",
-            value: trend.label,
-            color: trend.color,
-            bg: trend.bg,
-            text: true,
-          },
-        ].map(({ icon, label, value, color, bg, text }) => (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="gp-card p-4"
-          >
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 text-xl"
-              style={{ background: bg }}
-            >
-              {icon}
-            </div>
-            <p
-              className="text-xs font-medium mb-1"
-              style={{ color: "var(--gp-text-muted)" }}
-            >
-              {label}
-            </p>
-            <p
-              className={`font-bold ${text ? "text-sm" : "text-2xl"}`}
-              style={{ color, fontFamily: "var(--font-display)" }}
-            >
-              {value}
-            </p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Subject Analysis */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="gp-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Star size={16} style={{ color: "#10b981" }} />
-            <h3
-              className="font-semibold text-sm"
-              style={{ color: "var(--gp-text)" }}
-            >
-              Strong Subjects
-            </h3>
-          </div>
-          {strongSubjects.length === 0 ? (
-            <p
-              className="text-sm text-center py-4"
-              style={{ color: "var(--gp-text-muted)" }}
-            >
-              No A- or above subjects yet
-            </p>
-          ) : (
-            strongSubjects.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between py-2 border-b last:border-0"
-                style={{ borderColor: "var(--gp-border)" }}
-              >
-                <span
-                  className="text-sm truncate mr-2"
-                  style={{ color: "var(--gp-text)" }}
-                >
-                  {s.name}
-                </span>
-                <span
-                  className="px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0"
-                  style={{ background: "#ecfdf5", color: "#065f46" }}
-                >
-                  {s.grade}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="gp-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle size={16} style={{ color: "#f59e0b" }} />
-            <h3
-              className="font-semibold text-sm"
-              style={{ color: "var(--gp-text)" }}
-            >
-              Needs Attention
-            </h3>
-          </div>
-          {weakSubjects.length === 0 ? (
-            <p
-              className="text-sm text-center py-4"
-              style={{ color: "var(--gp-text-muted)" }}
-            >
-              All subjects above B- 🎉
-            </p>
-          ) : (
-            weakSubjects.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between py-2 border-b last:border-0"
-                style={{ borderColor: "var(--gp-border)" }}
-              >
-                <span
-                  className="text-sm truncate mr-2"
-                  style={{ color: "var(--gp-text)" }}
-                >
-                  {s.name}
-                </span>
-                <span
-                  className="px-2 py-0.5 rounded-lg text-xs font-semibold shrink-0"
-                  style={{
-                    background: s.grade === "F" ? "#fef2f2" : "#fffbeb",
-                    color: s.grade === "F" ? "#991b1b" : "#92400e",
-                  }}
-                >
-                  {s.grade}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[
-          {
-            label: "GPA Trend",
-            delay: 0.1,
-            Chart: () => <GPATrendChart subjects={subjects} />,
-          },
-          {
-            label: "Grade Distribution",
-            delay: 0.15,
-            Chart: () => <GradeDistributionChart subjects={subjects} />,
-          },
-          {
-            label: "Credit Analysis",
-            delay: 0.2,
-            Chart: () => <CreditAnalysisChart subjects={subjects} />,
-          },
-          {
-            label: "Year-wise GPA",
-            delay: 0.25,
-            Chart: () => <YearSemesterChart subjects={subjects} />,
-          },
-        ].map(({ label, delay, Chart }) => (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay }}
-            className="gp-card p-5 min-w-0"
-          >
-            <h4
-              className="font-semibold text-sm mb-3"
-              style={{ color: "var(--gp-text)" }}
-            >
-              {label}
-            </h4>
-            <div className="w-full overflow-hidden">
-              <Chart />
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <AIInsightCard insights={aiInsights} loading={aiLoading} />
+          Explore Improvement
+          <ArrowRight size={16} />
+        </Link>
+      </section>
     </div>
   );
 }

@@ -165,7 +165,7 @@ function SubjectCard({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <h3
-                className="break-words text-sm font-semibold"
+                className="wrap-break-word text-sm font-semibold"
                 style={{ color: "var(--gp-text)" }}
               >
                 {subject.name}
