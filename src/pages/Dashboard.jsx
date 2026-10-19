@@ -10,6 +10,8 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { useAcademic } from "../hooks/useAcademic";
 import { GRADE_POINTS } from "../data/gradeData";
@@ -26,15 +28,16 @@ function formatNumber(value, digits = 2) {
 function SectionHeader({ title, description, action }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <h2
           className="text-base font-semibold sm:text-lg"
           style={{ color: "var(--gp-text)" }}
         >
           {title}
         </h2>
+
         <p
-          className="mt-1 text-xs sm:text-sm"
+          className="mt-1 text-xs leading-5 sm:text-sm"
           style={{ color: "var(--gp-text-muted)" }}
         >
           {description}
@@ -44,7 +47,7 @@ function SectionHeader({ title, description, action }) {
       {action && (
         <Link
           to={action.to}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
+          className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
           style={{ color: "var(--gp-primary)" }}
         >
           {action.label}
@@ -57,7 +60,7 @@ function SectionHeader({ title, description, action }) {
 
 function OverviewCard({ icon: Icon, label, value, detail, accent }) {
   return (
-    <div className="gp-card relative overflow-hidden p-5">
+    <div className="gp-card relative min-w-0 overflow-hidden p-5">
       <div className="flex items-start justify-between gap-3">
         <div
           className="flex size-11 shrink-0 items-center justify-center rounded-xl"
@@ -89,13 +92,16 @@ function OverviewCard({ icon: Icon, label, value, detail, accent }) {
         </p>
 
         <p
-          className="gp-tabular-nums mt-1.5 truncate text-[28px] font-bold tracking-tight"
+          className="gp-tabular-nums mt-1.5 text-[28px] font-bold tracking-tight break-words"
           style={{ color: "var(--gp-text)" }}
         >
           {value}
         </p>
 
-        <p className="mt-1 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+        <p
+          className="mt-1 text-xs leading-5"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
           {detail}
         </p>
       </div>
@@ -114,7 +120,10 @@ function ChartCard({ title, description, children }) {
           {title}
         </h3>
 
-        <p className="mt-1 text-xs" style={{ color: "var(--gp-text-muted)" }}>
+        <p
+          className="mt-1 text-xs leading-5"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
           {description}
         </p>
       </div>
@@ -129,9 +138,7 @@ function QuickAction({ to, icon: Icon, title, description }) {
     <Link
       to={to}
       className="group flex min-w-0 items-center gap-3 rounded-xl border p-3.5 transition-colors hover:bg-[var(--gp-surface-2)]"
-      style={{
-        borderColor: "var(--gp-border)",
-      }}
+      style={{ borderColor: "var(--gp-border)" }}
     >
       <div
         className="flex size-10 shrink-0 items-center justify-center rounded-xl"
@@ -145,14 +152,14 @@ function QuickAction({ to, icon: Icon, title, description }) {
 
       <div className="min-w-0 flex-1">
         <p
-          className="truncate text-xs font-semibold sm:text-sm"
+          className="text-xs font-semibold sm:text-sm"
           style={{ color: "var(--gp-text)" }}
         >
           {title}
         </p>
 
         <p
-          className="mt-0.5 text-[11px]"
+          className="mt-0.5 text-[11px] leading-5"
           style={{ color: "var(--gp-text-muted)" }}
         >
           {description}
@@ -168,9 +175,103 @@ function QuickAction({ to, icon: Icon, title, description }) {
   );
 }
 
+function EmptyChart({ title }) {
+  return (
+    <div
+      className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed px-5 py-8 text-center"
+      style={{
+        borderColor: "var(--gp-border)",
+        background: "var(--gp-surface-2)",
+      }}
+    >
+      <div
+        className="flex size-12 items-center justify-center rounded-2xl"
+        style={{
+          background: "var(--gp-primary-bg)",
+          color: "var(--gp-primary)",
+        }}
+      >
+        <ChartNoAxesCombined size={23} />
+      </div>
+
+      <h4
+        className="mt-4 text-sm font-semibold"
+        style={{ color: "var(--gp-text)" }}
+      >
+        {title}
+      </h4>
+
+      <p
+        className="mt-2 max-w-xs text-xs leading-6"
+        style={{ color: "var(--gp-text-muted)" }}
+      >
+        Add subjects with valid grades and credits to see your academic
+        performance here.
+      </p>
+
+      <Link
+        to="/calculator"
+        className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold"
+        style={{ color: "var(--gp-primary)" }}
+      >
+        Open Calculator
+        <ArrowRight size={14} />
+      </Link>
+    </div>
+  );
+}
+
+function AcademicStatus({ failedSubjects, subjectCount }) {
+  if (subjectCount === 0) return null;
+
+  const hasFailures = failedSubjects > 0;
+
+  return (
+    <div
+      className="flex items-start gap-3 rounded-xl border p-4"
+      style={{
+        background: "var(--gp-surface-2)",
+        borderColor: "var(--gp-border)",
+      }}
+    >
+      <div
+        className="flex size-9 shrink-0 items-center justify-center rounded-xl"
+        style={{
+          background: hasFailures ? "#fef2f2" : "#ecfdf5",
+          color: hasFailures ? "#dc2626" : "#059669",
+        }}
+      >
+        {hasFailures ? <AlertCircle size={19} /> : <CheckCircle2 size={19} />}
+      </div>
+
+      <div className="min-w-0">
+        <h3
+          className="text-sm font-semibold"
+          style={{ color: "var(--gp-text)" }}
+        >
+          {hasFailures
+            ? "Subjects that need attention"
+            : "Your recorded subjects are on track"}
+        </h3>
+
+        <p
+          className="mt-1 text-xs leading-6"
+          style={{ color: "var(--gp-text-muted)" }}
+        >
+          {hasFailures
+            ? `${failedSubjects} ${
+                failedSubjects === 1 ? "subject has" : "subjects have"
+              } a failing grade. Review your results and explore possible improvement scenarios.`
+            : "No failing grades were found in your recorded subjects. Keep tracking your results to monitor your progress."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { state, computed } = useAcademic();
-  const { subjects } = state;
+  const { subjects, previousCGPA, previousCredits } = state;
   const { cgpa, totalCredits } = computed;
 
   const validSubjects = Array.isArray(subjects)
@@ -178,55 +279,75 @@ export default function Dashboard() {
         (subject) =>
           subject?.name?.trim() &&
           Object.hasOwn(GRADE_POINTS, subject.grade) &&
+          Number.isFinite(Number(subject.credit)) &&
           Number(subject.credit) > 0,
       )
     : [];
 
-  const averageGpa =
-    validSubjects.length > 0
-      ? validSubjects.reduce(
-          (sum, subject) => sum + GRADE_POINTS[subject.grade],
-          0,
-        ) / validSubjects.length
-      : 0;
+  const subjectCount = validSubjects.length;
 
   const completedCredits = validSubjects.reduce(
     (sum, subject) => sum + Number(subject.credit),
     0,
   );
 
+  const totalGradePoints = validSubjects.reduce(
+    (sum, subject) =>
+      sum + GRADE_POINTS[subject.grade] * Number(subject.credit),
+    0,
+  );
+
+  const semesterGpa =
+    completedCredits > 0 ? totalGradePoints / completedCredits : 0;
+
   const failedSubjects = validSubjects.filter(
     (subject) => subject.grade === "F",
   ).length;
 
-  const recentSubjects = validSubjects.slice(-5).reverse();
+  const previousCreditCount = Number(previousCredits);
+  const previousGpaValue = Number(previousCGPA);
 
-  const hasAcademicData = validSubjects.length > 0;
+  const hasPreviousRecords =
+    previousCGPA !== "" &&
+    previousCredits !== "" &&
+    Number.isFinite(previousCreditCount) &&
+    Number.isFinite(previousGpaValue) &&
+    previousCreditCount > 0 &&
+    previousGpaValue >= 0 &&
+    previousGpaValue <= 4;
+
+  const hasAcademicData = subjectCount > 0 || hasPreviousRecords;
+
+  const recentSubjects = validSubjects.slice(-5).reverse();
 
   const stats = [
     {
       icon: GraduationCap,
       label: "Current CGPA",
-      value: formatNumber(cgpa),
+      value: hasAcademicData ? formatNumber(cgpa) : "—",
       detail: "Out of 4.00",
     },
     {
       icon: BookOpen,
       label: "Total Credits",
-      value: formatNumber(totalCredits, 0),
-      detail: `${completedCredits} credits from listed subjects`,
+      value: hasAcademicData ? formatNumber(totalCredits, 0) : "0",
+      detail: hasPreviousRecords
+        ? `${formatNumber(previousCreditCount, 0)} previous + ${formatNumber(completedCredits, 0)} listed`
+        : `${formatNumber(completedCredits, 0)} credits from listed subjects`,
     },
     {
       icon: Target,
-      label: "Total Subjects",
-      value: validSubjects.length,
-      detail: `${failedSubjects} failed subjects`,
+      label: "Recorded Subjects",
+      value: subjectCount,
+      detail: `${failedSubjects} failed ${
+        failedSubjects === 1 ? "subject" : "subjects"
+      }`,
     },
     {
       icon: TrendingUp,
-      label: "Average Grade Point",
-      value: formatNumber(averageGpa),
-      detail: "Based on listed subjects",
+      label: "Listed Subjects GPA",
+      value: subjectCount > 0 ? formatNumber(semesterGpa) : "—",
+      detail: "Credit-weighted GPA of listed subjects",
     },
   ];
 
@@ -301,7 +422,7 @@ export default function Dashboard() {
             </h3>
 
             <p
-              className="mt-3 text-sm leading-relaxed"
+              className="mt-3 text-sm leading-7"
               style={{ color: "var(--gp-text-muted)" }}
             >
               Add your subjects, credits, and grades to calculate your GPA or
@@ -329,6 +450,13 @@ export default function Dashboard() {
         ))}
       </section>
 
+      {subjectCount > 0 && (
+        <AcademicStatus
+          failedSubjects={failedSubjects}
+          subjectCount={subjectCount}
+        />
+      )}
+
       <section className="space-y-5">
         <SectionHeader
           title="Performance Analytics"
@@ -344,14 +472,22 @@ export default function Dashboard() {
             title="Grade Distribution"
             description="How your grades are distributed across subjects."
           >
-            <GradeDistributionChart subjects={validSubjects} />
+            {subjectCount > 0 ? (
+              <GradeDistributionChart subjects={validSubjects} />
+            ) : (
+              <EmptyChart title="No grade data available" />
+            )}
           </ChartCard>
 
           <ChartCard
             title="Year / Semester Performance"
             description="Credit-weighted GPA across academic periods."
           >
-            <YearSemesterChart subjects={validSubjects} />
+            {subjectCount > 0 ? (
+              <YearSemesterChart subjects={validSubjects} />
+            ) : (
+              <EmptyChart title="No period data available" />
+            )}
           </ChartCard>
         </div>
       </section>
@@ -360,7 +496,7 @@ export default function Dashboard() {
         <div className="gp-card min-w-0 p-5 sm:p-6">
           <SectionHeader
             title="Recent Subjects"
-            description="Your latest subjects and recorded grades."
+            description="Your latest recorded subjects and grades."
             action={{
               to: "/calculator",
               label: "Manage Subjects",
@@ -388,6 +524,7 @@ export default function Dashboard() {
                   <div className="min-w-0 flex-1">
                     <p
                       className="truncate text-xs font-semibold sm:text-sm"
+                      title={subject.name}
                       style={{ color: "var(--gp-text)" }}
                     >
                       {subject.name}
@@ -423,7 +560,7 @@ export default function Dashboard() {
               </p>
 
               <p
-                className="mt-1 text-xs"
+                className="mt-1 text-xs leading-6"
                 style={{ color: "var(--gp-text-muted)" }}
               >
                 Add your first subject using the calculator.
