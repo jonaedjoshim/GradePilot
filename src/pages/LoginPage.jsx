@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import {
   ArrowRight,
   Eye,
@@ -12,11 +12,15 @@ import {
 import { FcGoogle } from "react-icons/fc";
 import toast from "react-hot-toast";
 import { authClient, signIn } from "../lib/auth-client";
+import { createAuthLink, getAuthRedirect } from "../lib/auth-redirect";
 
 const LOGIN_TOAST_ID = "gradepilot-login";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const redirect = getAuthRedirect(location.search);
 
   const submittingRef = useRef(false);
 
@@ -73,7 +77,7 @@ export default function LoginPage() {
         id: LOGIN_TOAST_ID,
       });
 
-      navigate("/", { replace: true });
+      navigate(redirect, { replace: true });
     } catch {
       toast.error("Something went wrong. Please try again.", {
         id: LOGIN_TOAST_ID,
@@ -94,8 +98,8 @@ export default function LoginPage() {
     try {
       const { error } = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/",
-        errorCallbackURL: "/login",
+        callbackURL: redirect,
+        errorCallbackURL: createAuthLink("/login", redirect),
       });
 
       if (error) {
@@ -157,6 +161,19 @@ export default function LoginPage() {
             >
               Sign in to continue your academic journey.
             </p>
+
+            {redirect !== "/" && (
+              <div
+                className="mt-4 rounded-xl border px-4 py-3 text-xs"
+                style={{
+                  background: "var(--gp-primary-bg)",
+                  borderColor: "var(--gp-border)",
+                  color: "var(--gp-primary)",
+                }}
+              >
+                You'll return to your requested feature after signing in.
+              </div>
+            )}
           </div>
 
           <button
@@ -270,7 +287,7 @@ export default function LoginPage() {
             <p className="text-sm" style={{ color: "var(--gp-text-muted)" }}>
               Don't have an account?{" "}
               <Link
-                to="/register"
+                to={createAuthLink("/register", redirect)}
                 className="font-semibold"
                 style={{ color: "var(--gp-primary)" }}
               >

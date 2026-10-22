@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import {
   ArrowRight,
   Eye,
@@ -13,11 +13,15 @@ import {
 import { FcGoogle } from "react-icons/fc";
 import toast from "react-hot-toast";
 import { authClient, signUp } from "../lib/auth-client";
+import { createAuthLink, getAuthRedirect } from "../lib/auth-redirect";
 
 const REGISTER_TOAST_ID = "gradepilot-register";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const redirect = getAuthRedirect(location.search);
 
   const submittingRef = useRef(false);
 
@@ -96,7 +100,7 @@ export default function RegisterPage() {
         id: REGISTER_TOAST_ID,
       });
 
-      navigate("/", { replace: true });
+      navigate(redirect, { replace: true });
     } catch {
       toast.error("Something went wrong. Please try again.", {
         id: REGISTER_TOAST_ID,
@@ -117,8 +121,8 @@ export default function RegisterPage() {
     try {
       const { error } = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/",
-        errorCallbackURL: "/register",
+        callbackURL: redirect,
+        errorCallbackURL: createAuthLink("/register", redirect),
       });
 
       if (error) {
@@ -180,6 +184,19 @@ export default function RegisterPage() {
             >
               Start your personalized academic journey.
             </p>
+
+            {redirect !== "/" && (
+              <div
+                className="mt-4 rounded-xl border px-4 py-3 text-xs"
+                style={{
+                  background: "var(--gp-primary-bg)",
+                  borderColor: "var(--gp-border)",
+                  color: "var(--gp-primary)",
+                }}
+              >
+                You'll return to your requested feature after registration.
+              </div>
+            )}
           </div>
 
           <button
@@ -327,8 +344,18 @@ export default function RegisterPage() {
                   onChange={updateField}
                   required
                   disabled={isBusy}
-                  className="gp-input !pl-11"
+                  className="gp-input !pl-11 !pr-11"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-3"
+                  style={{ color: "var(--gp-text-muted)" }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -349,7 +376,7 @@ export default function RegisterPage() {
             <p className="text-sm" style={{ color: "var(--gp-text-muted)" }}>
               Already have an account?{" "}
               <Link
-                to="/login"
+                to={createAuthLink("/login", redirect)}
                 className="font-semibold"
                 style={{ color: "var(--gp-primary)" }}
               >

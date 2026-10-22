@@ -100,7 +100,7 @@ export default function ProtectedRoute({ children }) {
   const registerLink = `/register?redirect=${encodeURIComponent(returnTo)}`;
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-[4px]">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-xs">
       <button
         type="button"
         onClick={() => setDismissedPath(location.pathname)}
