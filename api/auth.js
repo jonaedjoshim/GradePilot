@@ -1,5 +1,5 @@
 import { toNodeHandler } from "better-auth/node";
-import { getAuth } from "../../server/auth/auth.js";
+import { getAuth } from "../server/auth/auth.js";
 
 export default async function handler(request, response) {
   try {

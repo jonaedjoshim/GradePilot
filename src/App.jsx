@@ -11,6 +11,8 @@ const PredictionPage = lazy(() => import("./pages/PredictionPage"));
 const ImprovementPage = lazy(() => import("./pages/ImprovementPage"));
 const InsightsPage = lazy(() => import("./pages/InsightsPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 
 function PageLoader() {
   return (
@@ -46,17 +48,15 @@ function PageLoader() {
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
-
         <Route path="/calculator" element={<CalculatorPage />} />
-
         <Route path="/prediction" element={<PredictionPage />} />
-
         <Route path="/improvement" element={<ImprovementPage />} />
-
         <Route path="/insights" element={<InsightsPage />} />
-
         <Route path="/about" element={<AboutPage />} />
       </Route>
     </Routes>
