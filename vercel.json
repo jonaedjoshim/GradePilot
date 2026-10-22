@@ -3,6 +3,10 @@
     {
       "source": "/api/auth/:path*",
       "destination": "/api/auth"
+    },
+    {
+      "source": "/api/academic/:path*",
+      "destination": "/api/academic"
     }
   ]
 }

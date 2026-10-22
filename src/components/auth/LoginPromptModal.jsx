@@ -49,7 +49,7 @@ export default function LoginPromptModal({
         type="button"
         onClick={onClose}
         aria-label="Close dialog"
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-[4px]"
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"
       />
 
       <section
