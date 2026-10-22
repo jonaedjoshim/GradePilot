@@ -1,18 +1,56 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link, NavLink, useLocation } from "react-router";
-import { GraduationCap, Menu, Moon, Sun, X, ChevronRight } from "lucide-react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
+import {
+  ChevronDown,
+  ChevronRight,
+  GraduationCap,
+  LogIn,
+  LogOut,
+  Menu,
+  Moon,
+  Sun,
+  UserRound,
+  X,
+} from "lucide-react";
+import toast from "react-hot-toast";
 import { useAcademic } from "../../hooks/useAcademic";
+import { signOut, useSession } from "../../lib/auth-client";
 import { getCurrentPage, NAV_ITEMS } from "./navigation";
+
+function getInitials(name) {
+  if (!name?.trim()) return "GP";
+
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
 
 export default function Topbar() {
   const { state, dispatch } = useAcademic();
+  const { data: session, isPending } = useSession();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const accountRef = useRef(null);
+  const signingOutRef = useRef(false);
 
   const currentPage = getCurrentPage(pathname);
   const isDark = state.theme === "dark";
+  const user = session?.user;
+
+  useEffect(() => {
+    setAccountOpen(false);
+    setMobileOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -34,12 +72,60 @@ export default function Topbar() {
     };
   }, [mobileOpen]);
 
-  const toggleTheme = () => {
-    dispatch({ type: "TOGGLE_THEME" });
-  };
+  useEffect(() => {
+    if (!accountOpen) return;
 
-  const closeMenu = () => {
-    setMobileOpen(false);
+    const handlePointerDown = (event) => {
+      if (accountRef.current && !accountRef.current.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setAccountOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [accountOpen]);
+
+  const handleSignOut = async () => {
+    if (signingOutRef.current) return;
+
+    signingOutRef.current = true;
+    setSigningOut(true);
+    setAccountOpen(false);
+
+    try {
+      const { error } = await signOut();
+
+      if (error) {
+        toast.error(error.message || "Unable to sign out", {
+          id: "gradepilot-signout",
+        });
+        return;
+      }
+
+      toast.success("Signed out successfully", {
+        id: "gradepilot-signout",
+      });
+
+      navigate("/", { replace: true });
+    } catch {
+      toast.error("Unable to sign out. Please try again.", {
+        id: "gradepilot-signout",
+      });
+    } finally {
+      signingOutRef.current = false;
+      setSigningOut(false);
+    }
   };
 
   return (
@@ -51,7 +137,7 @@ export default function Topbar() {
           borderColor: "var(--gp-border)",
         }}
       >
-        <div className="flex h-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="flex h-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -87,9 +173,9 @@ export default function Topbar() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <span
-              className="hidden rounded-full border px-3 py-1 text-[11px] font-medium md:inline-flex"
+              className="hidden rounded-full border px-3 py-1 text-[11px] font-medium xl:inline-flex"
               style={{
                 borderColor: "var(--gp-border)",
                 color: "var(--gp-text-muted)",
@@ -101,12 +187,12 @@ export default function Topbar() {
 
             <button
               type="button"
-              onClick={toggleTheme}
+              onClick={() => dispatch({ type: "TOGGLE_THEME" })}
               aria-label={
                 isDark ? "Switch to light mode" : "Switch to dark mode"
               }
               title={isDark ? "Light mode" : "Dark mode"}
-              className="flex size-10 items-center justify-center rounded-xl border transition-colors hover:bg-(--gp-surface-2)"
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl border transition-colors hover:bg-(--gp-surface-2)"
               style={{
                 borderColor: "var(--gp-border)",
                 color: "var(--gp-text-secondary)",
@@ -115,17 +201,103 @@ export default function Topbar() {
               {isDark ? <Sun size={19} /> : <Moon size={19} />}
             </button>
 
-            <div
-              className="flex size-9 items-center justify-center rounded-full border text-xs font-bold"
-              style={{
-                background: "var(--gp-primary-bg)",
-                borderColor: "var(--gp-border)",
-                color: "var(--gp-primary)",
-              }}
-              title="Guest workspace"
-            >
-              GP
-            </div>
+            {isPending ? (
+              <div
+                className="h-10 w-24 animate-pulse rounded-xl"
+                style={{ background: "var(--gp-surface-2)" }}
+                aria-label="Loading account"
+              />
+            ) : user ? (
+              <div ref={accountRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((open) => !open)}
+                  aria-label="Account menu"
+                  aria-expanded={accountOpen}
+                  aria-haspopup="menu"
+                  className="flex h-10 max-w-48 items-center gap-2 rounded-xl border px-1.5 pr-2.5 transition-colors hover:bg-(--gp-surface-2)"
+                  style={{ borderColor: "var(--gp-border)" }}
+                >
+                  <span
+                    className="flex size-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
+                    style={{
+                      background: "var(--gp-primary-bg)",
+                      color: "var(--gp-primary)",
+                    }}
+                  >
+                    {getInitials(user.name)}
+                  </span>
+
+                  <span
+                    className="hidden max-w-24 truncate text-xs font-semibold sm:block"
+                    style={{ color: "var(--gp-text)" }}
+                  >
+                    {user.name}
+                  </span>
+
+                  <ChevronDown
+                    size={14}
+                    className="hidden shrink-0 sm:block"
+                    style={{ color: "var(--gp-text-muted)" }}
+                  />
+                </button>
+
+                {accountOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Account options"
+                    className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border p-2 shadow-xl"
+                    style={{
+                      background: "var(--gp-surface)",
+                      borderColor: "var(--gp-border)",
+                    }}
+                  >
+                    <div
+                      className="border-b px-3 py-3"
+                      style={{ borderColor: "var(--gp-border)" }}
+                    >
+                      <p
+                        className="truncate text-sm font-semibold"
+                        style={{ color: "var(--gp-text)" }}
+                      >
+                        {user.name}
+                      </p>
+
+                      <p
+                        className="mt-1 truncate text-xs"
+                        style={{ color: "var(--gp-text-muted)" }}
+                      >
+                        {user.email}
+                      </p>
+
+                      <span className="gp-badge gp-badge-success mt-3">
+                        Signed in
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleSignOut}
+                      disabled={signingOut}
+                      className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-(--gp-surface-2)"
+                      style={{ color: "var(--gp-danger)" }}
+                    >
+                      <LogOut size={17} />
+                      {signingOut ? "Signing out..." : "Sign Out"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="gp-btn gp-btn-primary whitespace-nowrap px-3 sm:px-4"
+              >
+                <LogIn size={17} />
+                <span>Sign In</span>
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -139,7 +311,7 @@ export default function Topbar() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={closeMenu}
+              onClick={() => setMobileOpen(false)}
               className="absolute inset-0 h-full w-full bg-slate-950/50 backdrop-blur-[3px]"
             />
 
@@ -151,7 +323,11 @@ export default function Topbar() {
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              transition={{
+                type: "spring",
+                damping: 30,
+                stiffness: 300,
+              }}
               className="absolute inset-y-0 left-0 flex w-[min(320px,85vw)] flex-col border-r shadow-2xl"
               style={{
                 background: "var(--gp-surface)",
@@ -164,7 +340,7 @@ export default function Topbar() {
               >
                 <Link
                   to="/"
-                  onClick={closeMenu}
+                  onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-3"
                 >
                   <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
@@ -178,6 +354,7 @@ export default function Topbar() {
                     >
                       GradePilot
                     </span>
+
                     <span
                       className="block text-[10px]"
                       style={{ color: "var(--gp-text-muted)" }}
@@ -189,7 +366,7 @@ export default function Topbar() {
 
                 <button
                   type="button"
-                  onClick={closeMenu}
+                  onClick={() => setMobileOpen(false)}
                   aria-label="Close navigation"
                   className="flex size-9 items-center justify-center rounded-lg hover:bg-(--gp-surface-2)"
                   style={{ color: "var(--gp-text)" }}
@@ -212,7 +389,7 @@ export default function Topbar() {
                       key={to}
                       to={to}
                       end={to === "/"}
-                      onClick={closeMenu}
+                      onClick={() => setMobileOpen(false)}
                       className="flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors"
                       style={({ isActive }) => ({
                         background: isActive
@@ -231,15 +408,73 @@ export default function Topbar() {
               </div>
 
               <div
-                className="border-t px-6 py-5"
+                className="shrink-0 border-t p-4"
                 style={{ borderColor: "var(--gp-border)" }}
               >
-                <p
-                  className="text-xs font-medium"
-                  style={{ color: "var(--gp-text-muted)" }}
-                >
-                  Plan better. Perform better.
-                </p>
+                {!isPending && user ? (
+                  <div className="space-y-3">
+                    <div className="flex min-w-0 items-center gap-3 px-2">
+                      <div
+                        className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold"
+                        style={{
+                          background: "var(--gp-primary-bg)",
+                          color: "var(--gp-primary)",
+                        }}
+                      >
+                        {getInitials(user.name)}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p
+                          className="truncate text-sm font-semibold"
+                          style={{ color: "var(--gp-text)" }}
+                        >
+                          {user.name}
+                        </p>
+
+                        <p
+                          className="truncate text-xs"
+                          style={{ color: "var(--gp-text-muted)" }}
+                        >
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileOpen(false);
+                        handleSignOut();
+                      }}
+                      disabled={signingOut}
+                      className="gp-btn gp-btn-secondary w-full"
+                    >
+                      <LogOut size={17} />
+                      {signingOut ? "Signing out..." : "Sign Out"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Link
+                      to="/login"
+                      onClick={() => setMobileOpen(false)}
+                      className="gp-btn gp-btn-primary w-full"
+                    >
+                      <LogIn size={17} />
+                      Sign In
+                    </Link>
+
+                    <Link
+                      to="/register"
+                      onClick={() => setMobileOpen(false)}
+                      className="gp-btn gp-btn-secondary w-full"
+                    >
+                      <UserRound size={17} />
+                      Create Account
+                    </Link>
+                  </div>
+                )}
               </div>
             </motion.aside>
           </div>
