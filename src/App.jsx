@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router";
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "react-hot-toast";
 import { AcademicProvider } from "./context/AcademicContext";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/layout/Layout";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -53,10 +54,36 @@ function AppRoutes() {
 
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
+
         <Route path="/calculator" element={<CalculatorPage />} />
-        <Route path="/prediction" element={<PredictionPage />} />
-        <Route path="/improvement" element={<ImprovementPage />} />
-        <Route path="/insights" element={<InsightsPage />} />
+
+        <Route
+          path="/prediction"
+          element={
+            <ProtectedRoute>
+              <PredictionPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/improvement"
+          element={
+            <ProtectedRoute>
+              <ImprovementPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/insights"
+          element={
+            <ProtectedRoute>
+              <InsightsPage />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/about" element={<AboutPage />} />
       </Route>
     </Routes>
