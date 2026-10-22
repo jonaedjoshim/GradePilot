@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   ArrowRight,
@@ -10,13 +10,16 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import toast from "react-hot-toast";
-import { signUp } from "../lib/auth-client";
+import { authClient, signUp } from "../lib/auth-client";
 
 const REGISTER_TOAST_ID = "gradepilot-register";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+
+  const submittingRef = useRef(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -27,6 +30,9 @@ export default function RegisterPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const isBusy = loading || googleLoading;
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -40,7 +46,7 @@ export default function RegisterPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (loading) return;
+    if (submittingRef.current) return;
 
     if (
       !form.name.trim() ||
@@ -68,6 +74,7 @@ export default function RegisterPage() {
       return;
     }
 
+    submittingRef.current = true;
     setLoading(true);
     toast.dismiss(REGISTER_TOAST_ID);
 
@@ -95,7 +102,37 @@ export default function RegisterPage() {
         id: REGISTER_TOAST_ID,
       });
     } finally {
+      submittingRef.current = false;
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+    setGoogleLoading(true);
+    toast.dismiss(REGISTER_TOAST_ID);
+
+    try {
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/",
+        errorCallbackURL: "/register",
+      });
+
+      if (error) {
+        toast.error(error.message || "Unable to connect with Google", {
+          id: REGISTER_TOAST_ID,
+        });
+      }
+    } catch {
+      toast.error("Google sign-in failed. Please try again.", {
+        id: REGISTER_TOAST_ID,
+      });
+    } finally {
+      submittingRef.current = false;
+      setGoogleLoading(false);
     }
   };
 
@@ -105,10 +142,7 @@ export default function RegisterPage() {
       style={{ background: "var(--gp-bg)" }}
     >
       <div className="w-full max-w-md">
-        <Link
-          to="/"
-          className="mb-8 flex items-center justify-center gap-3"
-        >
+        <Link to="/" className="mb-8 flex items-center justify-center gap-3">
           <span className="flex size-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">
             <GraduationCap size={25} />
           </span>
@@ -148,6 +182,35 @@ export default function RegisterPage() {
             </p>
           </div>
 
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isBusy}
+            className="gp-btn gp-btn-secondary w-full gap-3"
+          >
+            <FcGoogle size={21} />
+            {googleLoading ? "Connecting to Google..." : "Continue with Google"}
+          </button>
+
+          <div className="my-6 flex items-center gap-4">
+            <div
+              className="h-px flex-1"
+              style={{ background: "var(--gp-border)" }}
+            />
+
+            <span
+              className="shrink-0 text-xs"
+              style={{ color: "var(--gp-text-muted)" }}
+            >
+              or continue with email
+            </span>
+
+            <div
+              className="h-px flex-1"
+              style={{ background: "var(--gp-border)" }}
+            />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="register-name" className="gp-label">
@@ -171,6 +234,7 @@ export default function RegisterPage() {
                   onChange={updateField}
                   required
                   maxLength={100}
+                  disabled={isBusy}
                   className="gp-input !pl-11"
                 />
               </div>
@@ -197,6 +261,7 @@ export default function RegisterPage() {
                   value={form.email}
                   onChange={updateField}
                   required
+                  disabled={isBusy}
                   className="gp-input !pl-11"
                 />
               </div>
@@ -224,6 +289,7 @@ export default function RegisterPage() {
                   onChange={updateField}
                   required
                   minLength={8}
+                  disabled={isBusy}
                   className="gp-input !pl-11 !pr-11"
                 />
 
@@ -260,6 +326,7 @@ export default function RegisterPage() {
                   value={form.confirmPassword}
                   onChange={updateField}
                   required
+                  disabled={isBusy}
                   className="gp-input !pl-11"
                 />
               </div>
@@ -267,7 +334,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={isBusy}
               className="gp-btn gp-btn-primary mt-2 w-full"
             >
               {loading ? "Creating account..." : "Create Account"}
@@ -279,10 +346,7 @@ export default function RegisterPage() {
             className="mt-6 border-t pt-6 text-center"
             style={{ borderColor: "var(--gp-border)" }}
           >
-            <p
-              className="text-sm"
-              style={{ color: "var(--gp-text-muted)" }}
-            >
+            <p className="text-sm" style={{ color: "var(--gp-text-muted)" }}>
               Already have an account?{" "}
               <Link
                 to="/login"

@@ -30,6 +30,41 @@ function getInitials(name) {
     .toUpperCase();
 }
 
+function UserAvatar({ user, size = "sm" }) {
+  const [imageError, setImageError] = useState(false);
+
+  const avatarSize = size === "lg" ? "size-10" : "size-7";
+  const textSize = size === "lg" ? "text-xs" : "text-[11px]";
+
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.image]);
+
+  if (user?.image && !imageError) {
+    return (
+      <img
+        src={user.image}
+        alt={`${user.name || "User"} profile`}
+        referrerPolicy="no-referrer"
+        onError={() => setImageError(true)}
+        className={`${avatarSize} shrink-0 rounded-lg object-cover`}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`flex ${avatarSize} shrink-0 items-center justify-center rounded-lg ${textSize} font-bold`}
+      style={{
+        background: "var(--gp-primary-bg)",
+        color: "var(--gp-primary)",
+      }}
+    >
+      {getInitials(user?.name)}
+    </span>
+  );
+}
+
 export default function Topbar() {
   const { state, dispatch } = useAcademic();
   const { data: session, isPending } = useSession();
@@ -218,15 +253,7 @@ export default function Topbar() {
                   className="flex h-10 max-w-48 items-center gap-2 rounded-xl border px-1.5 pr-2.5 transition-colors hover:bg-(--gp-surface-2)"
                   style={{ borderColor: "var(--gp-border)" }}
                 >
-                  <span
-                    className="flex size-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
-                    style={{
-                      background: "var(--gp-primary-bg)",
-                      color: "var(--gp-primary)",
-                    }}
-                  >
-                    {getInitials(user.name)}
-                  </span>
+                  <UserAvatar user={user} />
 
                   <span
                     className="hidden max-w-24 truncate text-xs font-semibold sm:block"
@@ -256,19 +283,25 @@ export default function Topbar() {
                       className="border-b px-3 py-3"
                       style={{ borderColor: "var(--gp-border)" }}
                     >
-                      <p
-                        className="truncate text-sm font-semibold"
-                        style={{ color: "var(--gp-text)" }}
-                      >
-                        {user.name}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <UserAvatar user={user} size="lg" />
 
-                      <p
-                        className="mt-1 truncate text-xs"
-                        style={{ color: "var(--gp-text-muted)" }}
-                      >
-                        {user.email}
-                      </p>
+                        <div className="min-w-0">
+                          <p
+                            className="truncate text-sm font-semibold"
+                            style={{ color: "var(--gp-text)" }}
+                          >
+                            {user.name}
+                          </p>
+
+                          <p
+                            className="mt-1 truncate text-xs"
+                            style={{ color: "var(--gp-text-muted)" }}
+                          >
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
 
                       <span className="gp-badge gp-badge-success mt-3">
                         Signed in
@@ -414,15 +447,7 @@ export default function Topbar() {
                 {!isPending && user ? (
                   <div className="space-y-3">
                     <div className="flex min-w-0 items-center gap-3 px-2">
-                      <div
-                        className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold"
-                        style={{
-                          background: "var(--gp-primary-bg)",
-                          color: "var(--gp-primary)",
-                        }}
-                      >
-                        {getInitials(user.name)}
-                      </div>
+                      <UserAvatar user={user} size="lg" />
 
                       <div className="min-w-0">
                         <p

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   ArrowRight,
@@ -9,13 +9,16 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import toast from "react-hot-toast";
-import { signIn } from "../lib/auth-client";
+import { authClient, signIn } from "../lib/auth-client";
 
 const LOGIN_TOAST_ID = "gradepilot-login";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+
+  const submittingRef = useRef(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -24,6 +27,9 @@ export default function LoginPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const isBusy = loading || googleLoading;
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -37,7 +43,7 @@ export default function LoginPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (loading) return;
+    if (submittingRef.current) return;
 
     if (!form.email.trim() || !form.password) {
       toast.error("Please complete all fields", {
@@ -46,6 +52,7 @@ export default function LoginPage() {
       return;
     }
 
+    submittingRef.current = true;
     setLoading(true);
     toast.dismiss(LOGIN_TOAST_ID);
 
@@ -72,7 +79,37 @@ export default function LoginPage() {
         id: LOGIN_TOAST_ID,
       });
     } finally {
+      submittingRef.current = false;
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+    setGoogleLoading(true);
+    toast.dismiss(LOGIN_TOAST_ID);
+
+    try {
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/",
+        errorCallbackURL: "/login",
+      });
+
+      if (error) {
+        toast.error(error.message || "Unable to connect with Google", {
+          id: LOGIN_TOAST_ID,
+        });
+      }
+    } catch {
+      toast.error("Google sign-in failed. Please try again.", {
+        id: LOGIN_TOAST_ID,
+      });
+    } finally {
+      submittingRef.current = false;
+      setGoogleLoading(false);
     }
   };
 
@@ -122,6 +159,35 @@ export default function LoginPage() {
             </p>
           </div>
 
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isBusy}
+            className="gp-btn gp-btn-secondary w-full gap-3"
+          >
+            <FcGoogle size={21} />
+            {googleLoading ? "Connecting to Google..." : "Continue with Google"}
+          </button>
+
+          <div className="my-6 flex items-center gap-4">
+            <div
+              className="h-px flex-1"
+              style={{ background: "var(--gp-border)" }}
+            />
+
+            <span
+              className="shrink-0 text-xs"
+              style={{ color: "var(--gp-text-muted)" }}
+            >
+              or continue with email
+            </span>
+
+            <div
+              className="h-px flex-1"
+              style={{ background: "var(--gp-border)" }}
+            />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="login-email" className="gp-label">
@@ -144,6 +210,7 @@ export default function LoginPage() {
                   value={form.email}
                   onChange={updateField}
                   required
+                  disabled={isBusy}
                   className="gp-input !pl-11"
                 />
               </div>
@@ -170,6 +237,7 @@ export default function LoginPage() {
                   value={form.password}
                   onChange={updateField}
                   required
+                  disabled={isBusy}
                   className="gp-input !pl-11 !pr-11"
                 />
 
@@ -187,7 +255,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={isBusy}
               className="gp-btn gp-btn-primary w-full"
             >
               {loading ? "Signing in..." : "Sign In"}
