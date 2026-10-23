@@ -111,7 +111,7 @@ export default async function handler(request, response) {
         return sendError(
           response,
           409,
-          "Academic data already exists. Existing cloud data was not changed.",
+          "Cloud data already exists. Review your records before continuing.",
         );
       }
 
@@ -124,28 +124,23 @@ export default async function handler(request, response) {
       });
     }
 
-    if (
-      typeof body.expectedUpdatedAt !== "string" ||
-      Number.isNaN(Date.parse(body.expectedUpdatedAt))
-    ) {
-      return sendError(
-        response,
-        400,
-        "A valid expectedUpdatedAt value is required",
-      );
+    const expectedRevision = body.expectedRevision;
+
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+      return sendError(response, 400, "A valid expectedRevision is required");
     }
 
     const result = await updateAcademicRecord(
       user.id,
       validation.data,
-      body.expectedUpdatedAt,
+      expectedRevision,
     );
 
     if (result.conflict) {
       return sendError(
         response,
         409,
-        "Cloud data has changed. Reload before saving to avoid overwriting newer data.",
+        "Cloud data has changed. Review the latest version before saving.",
       );
     }
 

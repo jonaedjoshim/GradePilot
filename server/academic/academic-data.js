@@ -83,23 +83,14 @@ export async function createAcademicRecord(userId, academicData) {
 export async function updateAcademicRecord(
   userId,
   academicData,
-  expectedUpdatedAt,
+  expectedRevision,
 ) {
   const collection = await getAcademicCollection();
-
-  const expectedDate = new Date(expectedUpdatedAt);
-
-  if (Number.isNaN(expectedDate.getTime())) {
-    return {
-      updated: false,
-      conflict: true,
-    };
-  }
 
   const result = await collection.updateOne(
     {
       userId,
-      updatedAt: expectedDate,
+      revision: expectedRevision,
     },
     {
       $set: {

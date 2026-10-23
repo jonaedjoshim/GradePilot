@@ -28,6 +28,7 @@ import AcademicSyncModal from "../components/auth/AcademicSyncModal";
 import AcademicSyncStatus from "../components/auth/AcademicSyncStatus";
 
 const SYNC_DELAY = 1500;
+const RETRY_DELAY = 10000;
 
 function createSubject(university) {
   return {
@@ -168,7 +169,10 @@ function academicReducer(state, action) {
       return { ...state, theme: action.payload };
 
     case "TOGGLE_SIDEBAR":
-      return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
+      return {
+        ...state,
+        sidebarCollapsed: !state.sidebarCollapsed,
+      };
 
     case "SET_AI_INSIGHTS":
       return {
@@ -178,7 +182,10 @@ function academicReducer(state, action) {
       };
 
     case "SET_AI_LOADING":
-      return { ...state, aiLoading: action.payload };
+      return {
+        ...state,
+        aiLoading: action.payload,
+      };
 
     case "LOAD_STATE":
       return validateAcademicState(action.payload, createInitialState());
@@ -226,13 +233,26 @@ function AcademicWorkspaceProvider({ children, userId }) {
   const [cloudRecord, setCloudRecord] = useState(null);
   const [syncBusy, setSyncBusy] = useState(false);
 
+  const stateRef = useRef(state);
   const revisionRef = useRef(null);
   const lastSavedRef = useRef(null);
+
   const syncReadyRef = useRef(false);
   const savingRef = useRef(false);
-  const stateRef = useRef(state);
   const mountedRef = useRef(true);
+  const initializedRef = useRef(false);
+  const conflictRef = useRef(false);
+
   const generationRef = useRef(0);
+  const retryTimerRef = useRef(null);
+  const saveTimerRef = useRef(null);
+  const saveRequestedRef = useRef(false);
+
+  const hadUserLocalRef = useRef(
+    userId ? hasSavedAcademicState(userId) : false,
+  );
+
+  const initialSignatureRef = useRef(getDataSignature(state));
 
   stateRef.current = state;
 
@@ -241,22 +261,94 @@ function AcademicWorkspaceProvider({ children, userId }) {
     setSyncReady(ready);
   }, []);
 
+  const clearSaveTimer = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
+
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
 
     return () => {
       mountedRef.current = false;
       generationRef.current += 1;
+
+      clearSaveTimer();
+      clearRetryTimer();
     };
-  }, []);
+  }, [clearSaveTimer, clearRetryTimer]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", state.theme);
   }, [state.theme]);
 
   useEffect(() => {
+    if (!userId) {
+      saveAcademicState(state);
+      return;
+    }
+
+    if (!initializedRef.current) {
+      return;
+    }
+
     saveAcademicState(state, userId);
   }, [state, userId]);
+
+  const loadCloudState = useCallback(
+    (record) => {
+      if (!record) return;
+
+      clearSaveTimer();
+      clearRetryTimer();
+
+      const normalized = validateAcademicState(
+        record.data,
+        createInitialState(),
+      );
+
+      dispatch({
+        type: "LOAD_STATE",
+        payload: normalized,
+      });
+
+      stateRef.current = normalized;
+
+      revisionRef.current = record.revision;
+      lastSavedRef.current = getDataSignature(normalized);
+
+      setCloudRecord(record);
+      setSyncPrompt(false);
+      setSyncStatus("saved");
+
+      conflictRef.current = false;
+      initializedRef.current = true;
+      saveRequestedRef.current = false;
+
+      updateSyncReady(true);
+    },
+    [clearSaveTimer, clearRetryTimer, updateSyncReady],
+  );
+
+  const refreshCloudRecord = useCallback(async () => {
+    const result = await academicApi.get();
+
+    const record = result.record;
+
+    setCloudRecord(record);
+    revisionRef.current = record?.revision ?? null;
+
+    return record;
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -274,9 +366,9 @@ function AcademicWorkspaceProvider({ children, userId }) {
         const record = result.record;
 
         setCloudRecord(record);
-        revisionRef.current = record?.updatedAt ?? null;
+        revisionRef.current = record?.revision ?? null;
 
-        const hasUserLocal = hasSavedAcademicState(userId);
+        const hasUserLocal = hadUserLocalRef.current;
         const hasGuestLocal = hasSavedAcademicState();
 
         if (record) {
@@ -286,23 +378,7 @@ function AcademicWorkspaceProvider({ children, userId }) {
             return;
           }
 
-          const normalized = validateAcademicState(
-            record.data,
-            createInitialState(),
-          );
-
-          dispatch({ type: "LOAD_STATE", payload: normalized });
-
-          lastSavedRef.current = getDataSignature(normalized);
-          updateSyncReady(true);
-          setSyncStatus("saved");
-
-          return;
-        }
-
-        if (hasUserLocal || hasGuestLocal) {
-          setSyncPrompt(true);
-          setSyncStatus("pending");
+          loadCloudState(record);
           return;
         }
 
@@ -321,38 +397,52 @@ function AcademicWorkspaceProvider({ children, userId }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, updateSyncReady]);
+  }, [userId, loadCloudState, updateSyncReady]);
 
-  const activateCloudData = useCallback(() => {
-    if (!cloudRecord) return;
+  const activateCloudData = useCallback(async () => {
+    if (syncBusy || !cloudRecord) return;
 
-    const normalized = validateAcademicState(
-      cloudRecord.data,
-      createInitialState(),
-    );
+    setSyncBusy(true);
 
-    dispatch({ type: "LOAD_STATE", payload: normalized });
+    try {
+      const latest = await refreshCloudRecord();
 
-    lastSavedRef.current = getDataSignature(normalized);
-    revisionRef.current = cloudRecord.updatedAt;
+      if (!latest) {
+        setSyncStatus("pending");
+        toast.error("Cloud records are no longer available.", {
+          id: "gradepilot-sync",
+        });
+        return;
+      }
 
-    updateSyncReady(true);
-    setSyncPrompt(false);
-    setSyncStatus("saved");
-  }, [cloudRecord, updateSyncReady]);
+      loadCloudState(latest);
+
+      toast.success("Cloud records loaded successfully", {
+        id: "gradepilot-sync",
+      });
+    } catch {
+      setSyncStatus("offline");
+
+      toast.error("Unable to load cloud records.", {
+        id: "gradepilot-sync",
+      });
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [cloudRecord, syncBusy, refreshCloudRecord, loadCloudState]);
 
   const activateLocalData = useCallback(async () => {
     if (syncBusy) return;
 
     const guestAvailable = hasSavedAcademicState();
-    const userAvailable = hasSavedAcademicState(userId);
+    const userAvailable = hadUserLocalRef.current;
 
     let source = stateRef.current;
 
     if (guestAvailable && userAvailable) {
       const choice = await Swal.fire({
         title: "Choose local records",
-        text: "Which device data would you like to use?",
+        text: "Which local academic records would you like to use?",
         showDenyButton: true,
         showCancelButton: true,
         confirmButtonText: "Guest Data",
@@ -365,65 +455,205 @@ function AcademicWorkspaceProvider({ children, userId }) {
       source = choice.isConfirmed
         ? loadAcademicState(createInitialState())
         : loadAcademicState(createInitialState(), userId);
-    } else if (guestAvailable) {
+    } else if (guestAvailable && !userAvailable) {
       source = loadAcademicState(createInitialState());
     }
 
-    if (cloudRecord) {
-      const confirmation = await Swal.fire({
-        title: "Replace cloud records?",
-        text: "Your current cloud academic records will be replaced by the selected local version. Continue only if this is what you want.",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Replace Cloud Data",
-        confirmButtonColor: "#4f46e5",
-        cancelButtonColor: "#64748b",
-      });
-
-      if (!confirmation.isConfirmed) return;
-    }
-
     setSyncBusy(true);
-    setSyncStatus("saving");
+    setSyncStatus("checking");
 
     try {
-      const data = getSyncData(source);
+      const latest = await refreshCloudRecord();
 
-      const result = cloudRecord
-        ? await academicApi.update(data, cloudRecord.updatedAt)
-        : await academicApi.create(data);
+      if (latest) {
+        const confirmation = await Swal.fire({
+          title: "Replace cloud records?",
+          text: "This will replace your current cloud academic data with the selected local version.",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "Replace Cloud Data",
+          confirmButtonColor: "#4f46e5",
+          cancelButtonColor: "#64748b",
+        });
 
-      const normalized = validateAcademicState(
-        result.record.data,
-        createInitialState(),
-      );
+        if (!confirmation.isConfirmed) {
+          setSyncStatus("pending");
+          return;
+        }
+      }
 
-      dispatch({ type: "LOAD_STATE", payload: normalized });
+      setSyncStatus("saving");
 
-      setCloudRecord(result.record);
-      revisionRef.current = result.record.updatedAt;
-      lastSavedRef.current = getDataSignature(normalized);
+      const result = latest
+        ? await academicApi.update(getSyncData(source), latest.revision)
+        : await academicApi.create(getSyncData(source));
 
-      updateSyncReady(true);
-      setSyncPrompt(false);
-      setSyncStatus("saved");
+      loadCloudState(result.record);
 
       toast.success("Academic data synced successfully", {
         id: "gradepilot-sync",
       });
     } catch (error) {
-      setSyncStatus(error.status === 409 ? "pending" : "offline");
+      if (error.status === 409) {
+        setSyncStatus("pending");
+        setSyncPrompt(true);
 
-      toast.error(
-        error.status === 409
-          ? "Cloud data changed. Reload to review the latest version."
-          : error.message,
-        { id: "gradepilot-sync" },
-      );
+        toast.error(
+          "Cloud records changed. Please review the latest version.",
+          { id: "gradepilot-sync" },
+        );
+      } else {
+        setSyncStatus("offline");
+
+        toast.error(error.message, {
+          id: "gradepilot-sync",
+        });
+      }
     } finally {
       setSyncBusy(false);
     }
-  }, [cloudRecord, syncBusy, updateSyncReady, userId]);
+  }, [syncBusy, userId, refreshCloudRecord, loadCloudState]);
+
+  const handleConflict = useCallback(async () => {
+    if (conflictRef.current) return;
+
+    conflictRef.current = true;
+
+    clearSaveTimer();
+    clearRetryTimer();
+
+    updateSyncReady(false);
+    setSyncStatus("pending");
+
+    try {
+      await refreshCloudRecord();
+      setSyncPrompt(true);
+
+      toast.error(
+        "Cloud data changed on another device. Choose which version to keep.",
+        { id: "gradepilot-sync" },
+      );
+    } catch {
+      setSyncStatus("offline");
+
+      toast.error(
+        "Unable to check the latest cloud records. Local changes are preserved.",
+        { id: "gradepilot-sync" },
+      );
+    } finally {
+      conflictRef.current = false;
+    }
+  }, [clearSaveTimer, clearRetryTimer, refreshCloudRecord, updateSyncReady]);
+
+  const performSaveRef = useRef(null);
+
+  const performSave = useCallback(async () => {
+    if (
+      !userId ||
+      !syncReadyRef.current ||
+      savingRef.current ||
+      conflictRef.current
+    ) {
+      return;
+    }
+
+    const snapshot = stateRef.current;
+    const signature = getDataSignature(snapshot);
+
+    if (signature === lastSavedRef.current) {
+      saveRequestedRef.current = false;
+      setSyncStatus("saved");
+      return;
+    }
+
+    if (!Number.isSafeInteger(revisionRef.current)) {
+      await handleConflict();
+      return;
+    }
+
+    savingRef.current = true;
+    saveRequestedRef.current = false;
+
+    clearRetryTimer();
+    setSyncStatus("saving");
+
+    const generation = generationRef.current;
+
+    try {
+      const result = await academicApi.update(
+        getSyncData(snapshot),
+        revisionRef.current,
+      );
+
+      if (!mountedRef.current || generation !== generationRef.current) {
+        return;
+      }
+
+      revisionRef.current = result.record.revision;
+      lastSavedRef.current = signature;
+      setCloudRecord(result.record);
+
+      if (getDataSignature(stateRef.current) === signature) {
+        setSyncStatus("saved");
+      } else {
+        saveRequestedRef.current = true;
+        setSyncStatus("saving");
+      }
+    } catch (error) {
+      if (!mountedRef.current || generation !== generationRef.current) {
+        return;
+      }
+
+      if (error.status === 409) {
+        await handleConflict();
+        return;
+      }
+
+      if (error.status === 401 || error.status === 403) {
+        updateSyncReady(false);
+        setSyncStatus("pending");
+
+        toast.error("Your session expired. Please sign in again.", {
+          id: "gradepilot-sync",
+        });
+
+        return;
+      }
+
+      setSyncStatus("offline");
+      saveRequestedRef.current = true;
+
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = null;
+        performSaveRef.current?.();
+      }, RETRY_DELAY);
+    } finally {
+      savingRef.current = false;
+
+      if (
+        mountedRef.current &&
+        generation === generationRef.current &&
+        syncReadyRef.current &&
+        saveRequestedRef.current &&
+        retryTimerRef.current === null
+      ) {
+        clearSaveTimer();
+
+        saveTimerRef.current = window.setTimeout(() => {
+          saveTimerRef.current = null;
+          performSaveRef.current?.();
+        }, SYNC_DELAY);
+      }
+    }
+  }, [
+    userId,
+    handleConflict,
+    clearRetryTimer,
+    clearSaveTimer,
+    updateSyncReady,
+  ]);
+
+  performSaveRef.current = performSave;
 
   useEffect(() => {
     if (!userId || !syncReady) return;
@@ -434,57 +664,45 @@ function AcademicWorkspaceProvider({ children, userId }) {
       return;
     }
 
+    if (savingRef.current) {
+      saveRequestedRef.current = true;
+      return;
+    }
+
+    clearSaveTimer();
+    clearRetryTimer();
+
     setSyncStatus("saving");
 
-    const timeout = window.setTimeout(async () => {
-      if (!syncReadyRef.current || savingRef.current) return;
-
-      savingRef.current = true;
-
-      const generation = generationRef.current;
-      const snapshot = stateRef.current;
-      const snapshotSignature = getDataSignature(snapshot);
-
-      try {
-        const result = await academicApi.update(
-          getSyncData(snapshot),
-          revisionRef.current,
-        );
-
-        if (!mountedRef.current || generation !== generationRef.current) {
-          return;
-        }
-
-        revisionRef.current = result.record.updatedAt;
-        lastSavedRef.current = snapshotSignature;
-
-        setSyncStatus(
-          getDataSignature(stateRef.current) === snapshotSignature
-            ? "saved"
-            : "saving",
-        );
-      } catch (error) {
-        if (!mountedRef.current || generation !== generationRef.current) {
-          return;
-        }
-
-        if (error.status === 409) {
-          updateSyncReady(false);
-          setSyncStatus("pending");
-
-          toast.error("Cloud data changed. Automatic saving has been paused.", {
-            id: "gradepilot-sync",
-          });
-        } else {
-          setSyncStatus("offline");
-        }
-      } finally {
-        savingRef.current = false;
-      }
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      performSaveRef.current?.();
     }, SYNC_DELAY);
 
-    return () => window.clearTimeout(timeout);
-  }, [state, userId, syncReady, updateSyncReady]);
+    return clearSaveTimer;
+  }, [state, userId, syncReady, clearSaveTimer, clearRetryTimer]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const handleOnline = () => {
+      if (!syncReadyRef.current) return;
+
+      clearRetryTimer();
+      clearSaveTimer();
+
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        performSaveRef.current?.();
+      }, 500);
+    };
+
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [userId, clearSaveTimer, clearRetryTimer]);
 
   const computed = useMemo(
     () =>
