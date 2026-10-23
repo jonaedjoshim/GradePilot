@@ -9,7 +9,7 @@
       "destination": "/api/academic"
     },
     {
-      "source": "/((?!api(?:/|$)|assets/|.*\\.[^/]+$).*)",
+      "source": "/((?!api(?:/|$)|assets/|@vite/|@react-refresh(?:/|$)|@id/|@fs/|src/|node_modules/|.*\\.[^/]+$).*)",
       "destination": "/index.html"
     }
   ]

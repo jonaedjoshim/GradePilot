@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -8,7 +9,6 @@ import {
   LineChart,
   Pie,
   PieChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -70,6 +70,56 @@ function EmptyChart({
   );
 }
 
+function ChartContainer({ children }) {
+  const containerRef = useRef(null);
+  const [size, setSize] = useState({
+    width: 0,
+    height: 0,
+  });
+
+  useEffect(() => {
+    const element = containerRef.current;
+
+    if (!element) return undefined;
+
+    const updateSize = () => {
+      const { width, height } = element.getBoundingClientRect();
+
+      setSize((previous) => {
+        const nextWidth = Math.floor(width);
+        const nextHeight = Math.floor(height);
+
+        if (previous.width === nextWidth && previous.height === nextHeight) {
+          return previous;
+        }
+
+        return {
+          width: nextWidth,
+          height: nextHeight,
+        };
+      });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(updateSize);
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="h-65 w-full min-w-0 overflow-hidden">
+      {size.width > 0 && size.height > 0
+        ? children(size.width, size.height)
+        : null}
+    </div>
+  );
+}
+
 export function GradeDistributionChart({ subjects }) {
   const validSubjects = getValidSubjects(subjects);
 
@@ -94,9 +144,9 @@ export function GradeDistributionChart({ subjects }) {
   }
 
   return (
-    <div className="h-65 w-full min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
+    <ChartContainer>
+      {(width, height) => (
+        <PieChart width={width} height={height}>
           <Pie
             data={data}
             dataKey="count"
@@ -120,8 +170,8 @@ export function GradeDistributionChart({ subjects }) {
 
           <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11 }} />
         </PieChart>
-      </ResponsiveContainer>
-    </div>
+      )}
+    </ChartContainer>
   );
 }
 
@@ -162,9 +212,11 @@ export function GPATrendChart({ subjects }) {
   }
 
   return (
-    <div className="h-65 w-full min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer>
+      {(width, height) => (
         <LineChart
+          width={width}
+          height={height}
           data={data}
           margin={{
             top: 10,
@@ -228,8 +280,8 @@ export function GPATrendChart({ subjects }) {
             dot={{ r: 3 }}
           />
         </LineChart>
-      </ResponsiveContainer>
-    </div>
+      )}
+    </ChartContainer>
   );
 }
 
@@ -247,9 +299,11 @@ export function CreditAnalysisChart({ subjects }) {
   }
 
   return (
-    <div className="h-65 w-full min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer>
+      {(width, height) => (
         <BarChart
+          width={width}
+          height={height}
           data={data}
           margin={{
             top: 10,
@@ -294,8 +348,8 @@ export function CreditAnalysisChart({ subjects }) {
             maxBarSize={44}
           />
         </BarChart>
-      </ResponsiveContainer>
-    </div>
+      )}
+    </ChartContainer>
   );
 }
 
@@ -340,9 +394,11 @@ export function YearSemesterChart({ subjects }) {
   }
 
   return (
-    <div className="h-65 w-full min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer>
+      {(width, height) => (
         <BarChart
+          width={width}
+          height={height}
           data={data}
           margin={{
             top: 10,
@@ -397,7 +453,7 @@ export function YearSemesterChart({ subjects }) {
             maxBarSize={52}
           />
         </BarChart>
-      </ResponsiveContainer>
-    </div>
+      )}
+    </ChartContainer>
   );
 }
