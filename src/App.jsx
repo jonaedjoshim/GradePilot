@@ -54,7 +54,6 @@ function AppRoutes() {
 
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
-
         <Route path="/calculator" element={<CalculatorPage />} />
 
         <Route

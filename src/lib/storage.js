@@ -231,21 +231,35 @@ export function validateAcademicState(data, defaults) {
   };
 }
 
-export function loadAcademicState(defaults) {
+export function getAcademicStorageKey(userId = null) {
+  return userId ? `gradepilot_user_${encodeURIComponent(userId)}` : STORAGE_KEY;
+}
+
+export function hasSavedAcademicState(userId = null) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(getAcademicStorageKey(userId)) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function loadAcademicState(defaults, userId = null) {
   if (typeof window === "undefined") {
     return defaults;
   }
 
   try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = window.localStorage.getItem(getAcademicStorageKey(userId));
 
     if (!saved) {
       return defaults;
     }
 
-    const parsed = JSON.parse(saved);
-
-    return validateAcademicState(parsed, defaults);
+    return validateAcademicState(JSON.parse(saved), defaults);
   } catch (error) {
     console.warn("Unable to load saved academic data:", error);
 
@@ -253,12 +267,8 @@ export function loadAcademicState(defaults) {
   }
 }
 
-export function saveAcademicState(state) {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  if (!isPlainObject(state)) {
+export function saveAcademicState(state, userId = null) {
+  if (typeof window === "undefined" || !isPlainObject(state)) {
     return false;
   }
 
@@ -271,7 +281,10 @@ export function saveAcademicState(state) {
 
     data.storageVersion = STORAGE_VERSION;
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    window.localStorage.setItem(
+      getAcademicStorageKey(userId),
+      JSON.stringify(data),
+    );
 
     return true;
   } catch (error) {
@@ -281,13 +294,13 @@ export function saveAcademicState(state) {
   }
 }
 
-export function clearAcademicState() {
+export function clearAcademicState(userId = null) {
   if (typeof window === "undefined") {
     return false;
   }
 
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(getAcademicStorageKey(userId));
 
     return true;
   } catch {
