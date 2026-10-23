@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
   ArrowRight,
+  CircleAlert,
   Eye,
   EyeOff,
   GraduationCap,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   ShieldCheck,
@@ -12,8 +14,9 @@ import {
 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import toast from "react-hot-toast";
-import { authClient, signUp } from "../lib/auth-client";
+import { authClient, signUp, useSession } from "../lib/auth-client";
 import { createAuthLink, getAuthRedirect } from "../lib/auth-redirect";
+import { getAuthErrorMessage, getOAuthError } from "../lib/auth-errors";
 
 const REGISTER_TOAST_ID = "gradepilot-register";
 
@@ -21,7 +24,10 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const { data: session, isPending } = useSession();
+
   const redirect = getAuthRedirect(location.search);
+  const oauthError = getOAuthError(location.search);
 
   const submittingRef = useRef(false);
 
@@ -35,8 +41,15 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const isBusy = loading || googleLoading;
+
+  useEffect(() => {
+    if (!isPending && session?.user) {
+      navigate(redirect, { replace: true });
+    }
+  }, [isPending, session?.user, navigate, redirect]);
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -45,6 +58,16 @@ export default function RegisterPage() {
       ...previous,
       [name]: value,
     }));
+
+    setFormError("");
+  };
+
+  const showError = (message) => {
+    setFormError(message);
+
+    toast.error(message, {
+      id: REGISTER_TOAST_ID,
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -52,47 +75,49 @@ export default function RegisterPage() {
 
     if (submittingRef.current) return;
 
-    if (
-      !form.name.trim() ||
-      !form.email.trim() ||
-      !form.password ||
-      !form.confirmPassword
-    ) {
-      toast.error("Please complete all fields", {
-        id: REGISTER_TOAST_ID,
-      });
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+
+    if (!name || !email || !form.password || !form.confirmPassword) {
+      showError("Please complete all fields.");
+      return;
+    }
+
+    if (name.length < 2) {
+      showError("Please enter your full name.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError("Please enter a valid email address.");
       return;
     }
 
     if (form.password.length < 8) {
-      toast.error("Password must contain at least 8 characters", {
-        id: REGISTER_TOAST_ID,
-      });
+      showError("Password must contain at least 8 characters.");
       return;
     }
 
     if (form.password !== form.confirmPassword) {
-      toast.error("Passwords do not match", {
-        id: REGISTER_TOAST_ID,
-      });
+      showError("Passwords do not match.");
       return;
     }
 
     submittingRef.current = true;
     setLoading(true);
+    setFormError("");
+
     toast.dismiss(REGISTER_TOAST_ID);
 
     try {
       const { error } = await signUp.email({
-        name: form.name.trim(),
-        email: form.email.trim(),
+        name,
+        email,
         password: form.password,
       });
 
       if (error) {
-        toast.error(error.message || "Unable to create account", {
-          id: REGISTER_TOAST_ID,
-        });
+        showError(getAuthErrorMessage(error, "Unable to create your account."));
         return;
       }
 
@@ -102,9 +127,9 @@ export default function RegisterPage() {
 
       navigate(redirect, { replace: true });
     } catch {
-      toast.error("Something went wrong. Please try again.", {
-        id: REGISTER_TOAST_ID,
-      });
+      showError(
+        "Unable to connect to the authentication service. Please try again.",
+      );
     } finally {
       submittingRef.current = false;
       setLoading(false);
@@ -116,6 +141,8 @@ export default function RegisterPage() {
 
     submittingRef.current = true;
     setGoogleLoading(true);
+    setFormError("");
+
     toast.dismiss(REGISTER_TOAST_ID);
 
     try {
@@ -126,14 +153,12 @@ export default function RegisterPage() {
       });
 
       if (error) {
-        toast.error(error.message || "Unable to connect with Google", {
-          id: REGISTER_TOAST_ID,
-        });
+        showError(getAuthErrorMessage(error, "Unable to connect with Google."));
       }
     } catch {
-      toast.error("Google sign-in failed. Please try again.", {
-        id: REGISTER_TOAST_ID,
-      });
+      showError(
+        "Google authentication could not be started. Please try again.",
+      );
     } finally {
       submittingRef.current = false;
       setGoogleLoading(false);
@@ -187,7 +212,7 @@ export default function RegisterPage() {
 
             {redirect !== "/" && (
               <div
-                className="mt-4 rounded-xl border px-4 py-3 text-xs"
+                className="mt-4 rounded-xl border px-4 py-3 text-xs leading-relaxed"
                 style={{
                   background: "var(--gp-primary-bg)",
                   borderColor: "var(--gp-border)",
@@ -199,13 +224,37 @@ export default function RegisterPage() {
             )}
           </div>
 
+          {(oauthError || formError) && (
+            <div
+              role="alert"
+              className="mb-5 flex items-start gap-3 rounded-xl border p-3.5"
+              style={{
+                background: "var(--gp-danger-bg)",
+                borderColor: "var(--gp-border)",
+                color: "var(--gp-danger)",
+              }}
+            >
+              <CircleAlert size={18} className="mt-0.5 shrink-0" />
+
+              <p className="text-xs leading-relaxed">
+                {formError || oauthError}
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            disabled={isBusy}
-            className="gp-btn gp-btn-secondary w-full gap-3"
+            disabled={isBusy || isPending}
+            aria-busy={googleLoading}
+            className="gp-btn gp-btn-secondary w-full gap-3 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <FcGoogle size={21} />
+            {googleLoading ? (
+              <LoaderCircle size={19} className="animate-spin" />
+            ) : (
+              <FcGoogle size={21} />
+            )}
+
             {googleLoading ? "Connecting to Google..." : "Continue with Google"}
           </button>
 
@@ -250,6 +299,7 @@ export default function RegisterPage() {
                   value={form.name}
                   onChange={updateField}
                   required
+                  minLength={2}
                   maxLength={100}
                   disabled={isBusy}
                   className="gp-input !pl-11"
@@ -278,6 +328,7 @@ export default function RegisterPage() {
                   value={form.email}
                   onChange={updateField}
                   required
+                  maxLength={254}
                   disabled={isBusy}
                   className="gp-input !pl-11"
                 />
@@ -314,6 +365,8 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  disabled={isBusy}
                   className="absolute right-3 top-3"
                   style={{ color: "var(--gp-text-muted)" }}
                 >
@@ -343,6 +396,7 @@ export default function RegisterPage() {
                   value={form.confirmPassword}
                   onChange={updateField}
                   required
+                  minLength={8}
                   disabled={isBusy}
                   className="gp-input !pl-11 !pr-11"
                 />
@@ -351,6 +405,8 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  disabled={isBusy}
                   className="absolute right-3 top-3"
                   style={{ color: "var(--gp-text-muted)" }}
                 >
@@ -361,11 +417,21 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={isBusy}
-              className="gp-btn gp-btn-primary mt-2 w-full"
+              disabled={isBusy || isPending}
+              aria-busy={loading}
+              className="gp-btn gp-btn-primary mt-2 w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Creating account..." : "Create Account"}
-              {!loading && <ArrowRight size={17} />}
+              {loading ? (
+                <>
+                  <LoaderCircle size={17} className="animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                <>
+                  Create Account
+                  <ArrowRight size={17} />
+                </>
+              )}
             </button>
           </form>
 

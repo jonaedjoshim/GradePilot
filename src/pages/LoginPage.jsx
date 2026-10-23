@@ -1,18 +1,21 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
   ArrowRight,
+  CircleAlert,
   Eye,
   EyeOff,
   GraduationCap,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   ShieldCheck,
 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import toast from "react-hot-toast";
-import { authClient, signIn } from "../lib/auth-client";
+import { authClient, signIn, useSession } from "../lib/auth-client";
 import { createAuthLink, getAuthRedirect } from "../lib/auth-redirect";
+import { getAuthErrorMessage, getOAuthError } from "../lib/auth-errors";
 
 const LOGIN_TOAST_ID = "gradepilot-login";
 
@@ -20,7 +23,10 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const { data: session, isPending } = useSession();
+
   const redirect = getAuthRedirect(location.search);
+  const oauthError = getOAuthError(location.search);
 
   const submittingRef = useRef(false);
 
@@ -32,8 +38,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const isBusy = loading || googleLoading;
+
+  useEffect(() => {
+    if (!isPending && session?.user) {
+      navigate(redirect, { replace: true });
+    }
+  }, [isPending, session?.user, navigate, redirect]);
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -42,6 +55,16 @@ export default function LoginPage() {
       ...previous,
       [name]: value,
     }));
+
+    setFormError("");
+  };
+
+  const showError = (message) => {
+    setFormError(message);
+
+    toast.error(message, {
+      id: LOGIN_TOAST_ID,
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -49,27 +72,34 @@ export default function LoginPage() {
 
     if (submittingRef.current) return;
 
-    if (!form.email.trim() || !form.password) {
-      toast.error("Please complete all fields", {
-        id: LOGIN_TOAST_ID,
-      });
+    const email = form.email.trim().toLowerCase();
+
+    if (!email || !form.password) {
+      showError("Please enter your email and password.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError("Please enter a valid email address.");
       return;
     }
 
     submittingRef.current = true;
     setLoading(true);
+    setFormError("");
+
     toast.dismiss(LOGIN_TOAST_ID);
 
     try {
       const { error } = await signIn.email({
-        email: form.email.trim(),
+        email,
         password: form.password,
       });
 
       if (error) {
-        toast.error(error.message || "Unable to sign in", {
-          id: LOGIN_TOAST_ID,
-        });
+        showError(
+          getAuthErrorMessage(error, "Unable to sign in. Please try again."),
+        );
         return;
       }
 
@@ -79,9 +109,9 @@ export default function LoginPage() {
 
       navigate(redirect, { replace: true });
     } catch {
-      toast.error("Something went wrong. Please try again.", {
-        id: LOGIN_TOAST_ID,
-      });
+      showError(
+        "Unable to connect to the authentication service. Please try again.",
+      );
     } finally {
       submittingRef.current = false;
       setLoading(false);
@@ -93,6 +123,8 @@ export default function LoginPage() {
 
     submittingRef.current = true;
     setGoogleLoading(true);
+    setFormError("");
+
     toast.dismiss(LOGIN_TOAST_ID);
 
     try {
@@ -103,14 +135,10 @@ export default function LoginPage() {
       });
 
       if (error) {
-        toast.error(error.message || "Unable to connect with Google", {
-          id: LOGIN_TOAST_ID,
-        });
+        showError(getAuthErrorMessage(error, "Unable to connect with Google."));
       }
     } catch {
-      toast.error("Google sign-in failed. Please try again.", {
-        id: LOGIN_TOAST_ID,
-      });
+      showError("Google sign-in could not be started. Please try again.");
     } finally {
       submittingRef.current = false;
       setGoogleLoading(false);
@@ -164,7 +192,7 @@ export default function LoginPage() {
 
             {redirect !== "/" && (
               <div
-                className="mt-4 rounded-xl border px-4 py-3 text-xs"
+                className="mt-4 rounded-xl border px-4 py-3 text-xs leading-relaxed"
                 style={{
                   background: "var(--gp-primary-bg)",
                   borderColor: "var(--gp-border)",
@@ -176,13 +204,37 @@ export default function LoginPage() {
             )}
           </div>
 
+          {(oauthError || formError) && (
+            <div
+              role="alert"
+              className="mb-5 flex items-start gap-3 rounded-xl border p-3.5"
+              style={{
+                background: "var(--gp-danger-bg)",
+                borderColor: "var(--gp-border)",
+                color: "var(--gp-danger)",
+              }}
+            >
+              <CircleAlert size={18} className="mt-0.5 shrink-0" />
+
+              <p className="text-xs leading-relaxed">
+                {formError || oauthError}
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            disabled={isBusy}
-            className="gp-btn gp-btn-secondary w-full gap-3"
+            disabled={isBusy || isPending}
+            aria-busy={googleLoading}
+            className="gp-btn gp-btn-secondary w-full gap-3 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <FcGoogle size={21} />
+            {googleLoading ? (
+              <LoaderCircle size={19} className="animate-spin" />
+            ) : (
+              <FcGoogle size={21} />
+            )}
+
             {googleLoading ? "Connecting to Google..." : "Continue with Google"}
           </button>
 
@@ -228,6 +280,7 @@ export default function LoginPage() {
                   onChange={updateField}
                   required
                   disabled={isBusy}
+                  maxLength={254}
                   className="gp-input !pl-11"
                 />
               </div>
@@ -262,6 +315,8 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  disabled={isBusy}
                   className="absolute right-3 top-3"
                   style={{ color: "var(--gp-text-muted)" }}
                 >
@@ -272,11 +327,21 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isBusy}
-              className="gp-btn gp-btn-primary w-full"
+              disabled={isBusy || isPending}
+              aria-busy={loading}
+              className="gp-btn gp-btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Signing in..." : "Sign In"}
-              {!loading && <ArrowRight size={17} />}
+              {loading ? (
+                <>
+                  <LoaderCircle size={17} className="animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight size={17} />
+                </>
+              )}
             </button>
           </form>
 
