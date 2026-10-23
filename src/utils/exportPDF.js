@@ -1,228 +1,516 @@
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import { GRADE_POINTS } from "../data/gradeData";
 
-const GRADE_POINTS_MAP = {
-  'A+':4,'A':3.75,'A-':3.5,'B+':3.25,'B':3,'B-':2.75,'C+':2.5,'C':2.25,'D':2,'F':0
+const COLORS = {
+  primary: [79, 70, 229],
+  primaryLight: [238, 242, 255],
+  text: [30, 41, 59],
+  muted: [100, 116, 139],
+  border: [226, 232, 240],
+  surface: [248, 250, 252],
+  white: [255, 255, 255],
+  success: [16, 185, 129],
+  danger: [239, 68, 68],
 };
 
-// ───── PDF Export ─────
-export async function exportToPDF({ cgpa, totalCredits, subjects, aiInsights }) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210;
-  let y = 20;
+const PAGE = {
+  width: 210,
+  height: 297,
+  margin: 16,
+  contentWidth: 178,
+  footerStart: 279,
+};
 
-  // Header gradient
-  doc.setFillColor(79, 70, 229);
-  doc.rect(0, 0, W, 44, 'F');
-  doc.setFillColor(99, 102, 241);
-  doc.rect(W - 60, 0, 60, 44, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  doc.text('GradePilot', 18, 18);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Academic Performance Report', 18, 27);
-  doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 18, 35);
-  y = 56;
+function setColor(doc, color, type = "text") {
+  if (type === "fill") {
+    doc.setFillColor(...color);
+  } else if (type === "draw") {
+    doc.setDrawColor(...color);
+  } else {
+    doc.setTextColor(...color);
+  }
+}
 
-  // Summary Box
-  doc.setFillColor(238, 242, 255);
-  doc.roundedRect(14, y, W - 28, 28, 4, 4, 'F');
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(79, 70, 229);
-  doc.text(cgpa.toFixed(2), 35, y + 17);
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Current CGPA', 28, y + 23);
+function formatNumber(value) {
+  const number = Number(value);
 
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(16, 185, 129);
-  doc.text(String(totalCredits), W - 65, y + 17);
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Total Credits', W - 73, y + 23);
+  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+}
 
-  const validSubjects = subjects.filter(s => s.name);
-  const passCount = validSubjects.filter(s => s.grade !== 'F').length;
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(245, 158, 11);
-  doc.text(String(validSubjects.length), W / 2 - 10, y + 17);
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${passCount} Passed`, W / 2 - 13, y + 23);
-  y += 38;
+function getValidSubjects(subjects) {
+  if (!Array.isArray(subjects)) return [];
 
-  // Group by Year-Semester
-  const groups = {};
-  validSubjects.forEach(s => {
-    const key = s.yearSemester || 'Uncategorized';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(s);
-  });
+  return subjects.filter(
+    (subject) =>
+      typeof subject?.name === "string" &&
+      subject.name.trim() &&
+      Object.hasOwn(GRADE_POINTS, subject.grade) &&
+      Number(subject.credit) > 0,
+  );
+}
 
-  const sortedGroups = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+function getGroupedSubjects(subjects) {
+  const groups = new Map();
 
-  for (const [groupName, groupSubjects] of sortedGroups) {
-    if (y > 240) { doc.addPage(); y = 18; }
+  for (const subject of subjects) {
+    const period = subject.yearSemester || "Other Subjects";
 
-    // Group header
-    doc.setFillColor(79, 70, 229);
-    doc.roundedRect(14, y, W - 28, 8, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text(groupName, 18, y + 5.5);
+    if (!groups.has(period)) {
+      groups.set(period, []);
+    }
 
-    // Group CGPA
-    const gWS = groupSubjects.reduce((s, sub) => s + (GRADE_POINTS_MAP[sub.grade] || 0) * sub.credit, 0);
-    const gTC = groupSubjects.reduce((s, sub) => s + Number(sub.credit), 0);
-    const gCGPA = gTC > 0 ? (gWS / gTC).toFixed(2) : '—';
-    doc.text(`GPA: ${gCGPA}  |  Credits: ${gTC}`, W - 60, y + 5.5);
-    y += 10;
-
-    // Table header
-    doc.setFillColor(238, 242, 255);
-    doc.rect(14, y, W - 28, 7, 'F');
-    doc.setTextColor(79, 70, 229);
-    doc.setFontSize(8);
-    doc.text('Subject', 18, y + 5);
-    doc.text('Credit', 114, y + 5);
-    doc.text('Grade', 140, y + 5);
-    doc.text('GPA Pts', 166, y + 5);
-    y += 7;
-
-    groupSubjects.forEach((s, i) => {
-      if (y > 270) { doc.addPage(); y = 18; }
-      if (i % 2 === 0) {
-        doc.setFillColor(248, 249, 252);
-        doc.rect(14, y, W - 28, 7, 'F');
-      }
-      doc.setTextColor(30, 41, 59);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.text(s.name.substring(0, 38), 18, y + 5);
-      doc.text(String(s.credit), 114, y + 5);
-      doc.text(s.grade, 140, y + 5);
-      const pts = GRADE_POINTS_MAP[s.grade] || 0;
-      doc.text(pts.toFixed(2), 166, y + 5);
-      y += 7;
-    });
-
-    y += 6;
+    groups.get(period).push(subject);
   }
 
-  // AI Insights
-  if (aiInsights) {
-    if (y > 220) { doc.addPage(); y = 18; }
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text('AI Academic Insights', 18, y);
-    y += 8;
+  return [...groups.entries()].sort(([first], [second]) =>
+    first.localeCompare(second, undefined, { numeric: true }),
+  );
+}
 
-    const riskColors = { Low: [16,185,129], Medium: [245,158,11], High: [239,68,68] };
-    const [r, g, b] = riskColors[aiInsights.riskLevel] || [100,116,139];
-    doc.setFillColor(r, g, b);
-    doc.circle(21, y + 3, 3, 'F');
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9.5);
-    doc.text(`Risk: ${aiInsights.riskLevel}  |  Status: ${aiInsights.status}  |  Required GPA: ${aiInsights.requiredGPA}`, 27, y + 4.5);
-    y += 11;
+function getGroupStats(subjects) {
+  const credits = subjects.reduce(
+    (total, subject) => total + Number(subject.credit),
+    0,
+  );
 
-    doc.setFont('helvetica', 'bold');
-    doc.text('Verdict:', 18, y);
-    doc.setFont('helvetica', 'normal');
-    const vLines = doc.splitTextToSize(aiInsights.verdict || '', W - 38);
-    doc.text(vLines, 18, y + 6);
-    y += 6 + vLines.length * 5 + 3;
+  const weightedPoints = subjects.reduce(
+    (total, subject) =>
+      total + GRADE_POINTS[subject.grade] * Number(subject.credit),
+    0,
+  );
 
-    if (aiInsights.suggestions?.length) {
-      doc.setFont('helvetica', 'bold');
-      doc.text('Recommendations:', 18, y);
-      y += 6;
-      aiInsights.suggestions.forEach(s => {
-        if (y > 272) { doc.addPage(); y = 18; }
-        const lines = doc.splitTextToSize(`• ${s}`, W - 40);
-        doc.setFont('helvetica', 'normal');
-        doc.text(lines, 23, y);
-        y += lines.length * 5 + 2;
-      });
+  return {
+    credits,
+    gpa: credits > 0 ? weightedPoints / credits : 0,
+  };
+}
+
+function drawPageHeader(doc, subtitle = "Academic Performance Report") {
+  setColor(doc, COLORS.primary, "fill");
+  doc.rect(0, 0, PAGE.width, 39, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(21);
+  setColor(doc, COLORS.white);
+  doc.text("GradePilot", PAGE.margin, 17);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(subtitle, PAGE.margin, 25);
+
+  doc.setFontSize(8);
+  doc.text(
+    new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    PAGE.margin,
+    32,
+  );
+}
+
+function addPage(doc) {
+  doc.addPage();
+  drawPageHeader(doc);
+
+  return 48;
+}
+
+function ensureSpace(doc, y, requiredHeight) {
+  if (y + requiredHeight > PAGE.footerStart - 7) {
+    return addPage(doc);
+  }
+
+  return y;
+}
+
+function drawSummary(doc, cgpa, totalCredits, subjects, y) {
+  const passed = subjects.filter((subject) => subject.grade !== "F").length;
+
+  setColor(doc, COLORS.primaryLight, "fill");
+  doc.roundedRect(PAGE.margin, y, PAGE.contentWidth, 31, 3, 3, "F");
+
+  const metrics = [
+    {
+      label: "Current CGPA",
+      value: formatNumber(cgpa),
+    },
+    {
+      label: "Total Credits",
+      value: String(totalCredits),
+    },
+    {
+      label: "Subjects",
+      value: String(subjects.length),
+    },
+    {
+      label: "Passed",
+      value: String(passed),
+    },
+  ];
+
+  const columnWidth = PAGE.contentWidth / metrics.length;
+
+  metrics.forEach((metric, index) => {
+    const x = PAGE.margin + columnWidth * index + columnWidth / 2;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    setColor(doc, COLORS.primary);
+    doc.text(metric.value, x, y + 14, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    setColor(doc, COLORS.muted);
+    doc.text(metric.label, x, y + 23, { align: "center" });
+  });
+
+  return y + 42;
+}
+
+function drawSectionTitle(doc, title, y) {
+  y = ensureSpace(doc, y, 13);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  setColor(doc, COLORS.text);
+  doc.text(title, PAGE.margin, y + 5);
+
+  return y + 12;
+}
+
+function drawTableHeader(doc, y) {
+  setColor(doc, COLORS.primaryLight, "fill");
+  doc.rect(PAGE.margin, y, PAGE.contentWidth, 9, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  setColor(doc, COLORS.primary);
+
+  doc.text("Subject", PAGE.margin + 4, y + 6);
+  doc.text("Credits", 123, y + 6);
+  doc.text("Grade", 149, y + 6);
+  doc.text("Points", 174, y + 6);
+
+  return y + 9;
+}
+
+function drawSubjectRow(doc, subject, index, y) {
+  const name = subject.name.trim();
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+
+  const nameLines = doc.splitTextToSize(name, 98);
+  const visibleLines = nameLines.slice(0, 2);
+
+  const rowHeight = Math.max(9, visibleLines.length * 4.5 + 3);
+
+  if (index % 2 === 0) {
+    setColor(doc, COLORS.surface, "fill");
+    doc.rect(PAGE.margin, y, PAGE.contentWidth, rowHeight, "F");
+  }
+
+  setColor(doc, COLORS.text);
+
+  doc.text(visibleLines, PAGE.margin + 4, y + 5.5);
+  doc.text(String(subject.credit), 123, y + 5.5);
+  doc.text(subject.grade, 149, y + 5.5);
+  doc.text(formatNumber(GRADE_POINTS[subject.grade]), 174, y + 5.5);
+
+  return y + rowHeight;
+}
+
+function drawSubjectGroups(doc, subjects, y) {
+  const groups = getGroupedSubjects(subjects);
+
+  for (const [period, periodSubjects] of groups) {
+    y = ensureSpace(doc, y, 24);
+
+    const stats = getGroupStats(periodSubjects);
+
+    setColor(doc, COLORS.primary, "fill");
+    doc.roundedRect(PAGE.margin, y, PAGE.contentWidth, 10, 2, 2, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    setColor(doc, COLORS.white);
+
+    const periodName = doc.splitTextToSize(period, 95)[0];
+
+    doc.text(periodName, PAGE.margin + 4, y + 6.5);
+
+    doc.setFontSize(8);
+    doc.text(
+      `GPA ${formatNumber(stats.gpa)}  |  ${stats.credits} Credits`,
+      PAGE.width - PAGE.margin - 4,
+      y + 6.5,
+      { align: "right" },
+    );
+
+    y += 12;
+    y = drawTableHeader(doc, y);
+
+    periodSubjects.forEach((subject, index) => {
+      const estimatedHeight = subject.name.length > 45 ? 13 : 9;
+
+      if (y + estimatedHeight > PAGE.footerStart - 7) {
+        y = addPage(doc);
+        y = drawTableHeader(doc, y);
+      }
+
+      y = drawSubjectRow(doc, subject, index, y);
+    });
+
+    y += 9;
+  }
+
+  return y;
+}
+
+function drawInsights(doc, insights, y) {
+  if (!insights || typeof insights !== "object") {
+    return y;
+  }
+
+  y = drawSectionTitle(doc, "Academic Insights", y);
+
+  const details = [
+    ["Risk Level", insights.riskLevel],
+    ["Academic Status", insights.status],
+    ["Required GPA", insights.requiredGPA],
+  ].filter(([, value]) => value !== undefined && value !== null);
+
+  doc.setFontSize(8.5);
+
+  for (const [label, value] of details) {
+    y = ensureSpace(doc, y, 8);
+
+    doc.setFont("helvetica", "bold");
+    setColor(doc, COLORS.text);
+    doc.text(`${label}:`, PAGE.margin, y);
+
+    doc.setFont("helvetica", "normal");
+    setColor(doc, COLORS.muted);
+    doc.text(String(value), PAGE.margin + 34, y);
+
+    y += 7;
+  }
+
+  if (typeof insights.verdict === "string" && insights.verdict.trim()) {
+    y += 3;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+
+    const lines = doc.splitTextToSize(insights.verdict, PAGE.contentWidth);
+
+    for (const line of lines) {
+      y = ensureSpace(doc, y, 6);
+      setColor(doc, COLORS.text);
+      doc.text(line, PAGE.margin, y);
+      y += 5;
+    }
+
+    y += 5;
+  }
+
+  if (Array.isArray(insights.suggestions) && insights.suggestions.length) {
+    y = drawSectionTitle(doc, "Academic Suggestions", y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+
+    for (const suggestion of insights.suggestions.slice(0, 10)) {
+      const lines = doc.splitTextToSize(
+        `- ${String(suggestion)}`,
+        PAGE.contentWidth - 5,
+      );
+
+      for (const line of lines) {
+        y = ensureSpace(doc, y, 6);
+        setColor(doc, COLORS.text);
+        doc.text(line, PAGE.margin + 2, y);
+        y += 5;
+      }
+
+      y += 3;
     }
   }
 
-  // Footer
+  return y;
+}
+
+function drawFooter(doc) {
   const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFillColor(248, 249, 252);
-    doc.rect(0, 282, W, 15, 'F');
+
+  for (let page = 1; page <= pageCount; page++) {
+    doc.setPage(page);
+
+    setColor(doc, COLORS.border, "draw");
+    doc.line(
+      PAGE.margin,
+      PAGE.footerStart,
+      PAGE.width - PAGE.margin,
+      PAGE.footerStart,
+    );
+
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text('Generated by GradePilot • Academic Intelligence Dashboard', W / 2, 289, { align: 'center' });
-    doc.text(`Page ${i} of ${pageCount}`, W / 2, 294, { align: 'center' });
+    setColor(doc, COLORS.muted);
+
+    doc.text(
+      "Generated by GradePilot | Academic Performance Report",
+      PAGE.margin,
+      286,
+    );
+
+    doc.text(`${page} / ${pageCount}`, PAGE.width - PAGE.margin, 286, {
+      align: "right",
+    });
   }
+}
+
+export async function exportToPDF({
+  cgpa,
+  totalCredits,
+  subjects,
+  aiInsights,
+}) {
+  const validSubjects = getValidSubjects(subjects);
+
+  if (!validSubjects.length && Number(totalCredits) <= 0) {
+    throw new Error("No academic results available for export");
+  }
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  drawPageHeader(doc);
+
+  let y = 49;
+
+  y = drawSummary(doc, cgpa, totalCredits, validSubjects, y);
+
+  if (validSubjects.length) {
+    y = drawSectionTitle(doc, "Subject Performance", y);
+    y = drawSubjectGroups(doc, validSubjects, y);
+  }
+
+  y = drawInsights(doc, aiInsights, y);
+
+  y = ensureSpace(doc, y + 5, 18);
+
+  setColor(doc, COLORS.primaryLight, "fill");
+
+  doc.roundedRect(PAGE.margin, y, PAGE.contentWidth, 18, 3, 3, "F");
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  setColor(doc, COLORS.muted);
+
+  doc.text(
+    "This report is a calculation-based academic summary.",
+    PAGE.margin + 5,
+    y + 7,
+  );
+
+  doc.text(
+    "It is not an official university transcript or result certificate.",
+    PAGE.margin + 5,
+    y + 13,
+  );
+
+  drawFooter(doc);
 
   doc.save(`GradePilot_Report_${Date.now()}.pdf`);
 }
 
-// ───── Image (PNG) Export ─────
 export async function exportToImage() {
-  // Use html2canvas on body with a targeted clip
-  const el = document.getElementById('gradepilot-export-root');
-  if (!el) throw new Error('Export element not found.');
+  const element = document.getElementById("gradepilot-export-root");
 
-  const bgColor = getComputedStyle(document.documentElement)
-    .getPropertyValue('--gp-bg').trim() || '#f8f9fc';
+  if (!element) {
+    throw new Error("Academic result container not found");
+  }
 
-  const canvas = await html2canvas(el, {
-    scale: 2,
+  const computedStyle = getComputedStyle(document.documentElement);
+
+  const backgroundColor =
+    computedStyle.getPropertyValue("--gp-bg").trim() || "#f8fafc";
+
+  const canvas = await html2canvas(element, {
+    scale: Math.min(2, window.devicePixelRatio || 1.5),
     useCORS: true,
-    allowTaint: true,
-    backgroundColor: bgColor || '#f8f9fc',
+    allowTaint: false,
+    backgroundColor,
     logging: false,
+    imageTimeout: 5000,
     removeContainer: true,
     foreignObjectRendering: false,
-    imageTimeout: 5000,
-    onclone: (clonedDoc) => {
-      // Copy CSS vars to cloned document root so styles render correctly
-      const vars = [
-        '--gp-bg','--gp-surface','--gp-surface-2','--gp-border',
-        '--gp-text','--gp-text-muted','--gp-primary','--gp-primary-bg',
+    onclone: (clonedDocument) => {
+      const sourceRoot = document.documentElement;
+      const clonedRoot = clonedDocument.documentElement;
+
+      const variables = [
+        "--gp-bg",
+        "--gp-surface",
+        "--gp-surface-2",
+        "--gp-border",
+        "--gp-border-strong",
+        "--gp-text",
+        "--gp-text-secondary",
+        "--gp-text-muted",
+        "--gp-primary",
+        "--gp-primary-bg",
+        "--gp-success",
+        "--gp-success-bg",
+        "--gp-warning",
+        "--gp-warning-bg",
+        "--gp-danger",
+        "--gp-danger-bg",
       ];
-      const root = document.documentElement;
-      const cloneRoot = clonedDoc.documentElement;
-      vars.forEach(v => {
-        cloneRoot.style.setProperty(v, getComputedStyle(root).getPropertyValue(v));
-      });
-      // Also copy data-theme attribute
-      cloneRoot.setAttribute('data-theme', root.getAttribute('data-theme') || 'light');
+
+      const sourceStyles = getComputedStyle(sourceRoot);
+
+      for (const variable of variables) {
+        clonedRoot.style.setProperty(
+          variable,
+          sourceStyles.getPropertyValue(variable),
+        );
+      }
+
+      clonedRoot.setAttribute(
+        "data-theme",
+        sourceRoot.getAttribute("data-theme") || "light",
+      );
     },
   });
 
   return new Promise((resolve, reject) => {
-    try {
-      canvas.toBlob((blob) => {
-        if (!blob) { reject(new Error('Canvas blob failed')); return; }
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = `GradePilot_${Date.now()}.png`;
-        link.href = url;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        resolve();
-      }, 'image/png');
-    } catch (err) {
-      reject(err);
-    }
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Unable to generate PNG image"));
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `GradePilot_Result_${Date.now()}.png`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      resolve();
+    }, "image/png");
   });
 }
