@@ -434,7 +434,13 @@ export default function CalculatorPage() {
     }
 
     return toast.promise(
-      Promise.resolve().then(() => exportToImage()),
+      Promise.resolve().then(() =>
+        exportToImage({
+          cgpa,
+          totalCredits,
+          subjects,
+        }),
+      ),
       {
         loading: "Generating image...",
         success: "Image exported successfully",

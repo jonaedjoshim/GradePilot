@@ -1,5 +1,4 @@
 import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
 import { GRADE_POINTS } from "../data/gradeData";
 
 const COLORS = {
@@ -133,22 +132,10 @@ function drawSummary(doc, cgpa, totalCredits, subjects, y) {
   doc.roundedRect(PAGE.margin, y, PAGE.contentWidth, 31, 3, 3, "F");
 
   const metrics = [
-    {
-      label: "Current CGPA",
-      value: formatNumber(cgpa),
-    },
-    {
-      label: "Total Credits",
-      value: String(totalCredits),
-    },
-    {
-      label: "Subjects",
-      value: String(subjects.length),
-    },
-    {
-      label: "Passed",
-      value: String(passed),
-    },
+    { label: "Current CGPA", value: formatNumber(cgpa) },
+    { label: "Total Credits", value: String(totalCredits) },
+    { label: "Subjects", value: String(subjects.length) },
+    { label: "Passed", value: String(passed) },
   ];
 
   const columnWidth = PAGE.contentWidth / metrics.length;
@@ -407,7 +394,6 @@ export async function exportToPDF({
   y = ensureSpace(doc, y + 5, 18);
 
   setColor(doc, COLORS.primaryLight, "fill");
-
   doc.roundedRect(PAGE.margin, y, PAGE.contentWidth, 18, 3, 3, "F");
 
   doc.setFont("helvetica", "normal");
@@ -431,86 +417,286 @@ export async function exportToPDF({
   doc.save(`GradePilot_Report_${Date.now()}.pdf`);
 }
 
-export async function exportToImage() {
-  const element = document.getElementById("gradepilot-export-root");
+function drawRoundedRect(ctx, x, y, width, height, radius, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
+  ctx.fill();
+}
 
-  if (!element) {
-    throw new Error("Academic result container not found");
+function drawCanvasText(ctx, text, x, y, options = {}) {
+  const {
+    size = 24,
+    color = "#1e293b",
+    weight = 400,
+    align = "left",
+  } = options;
+
+  ctx.fillStyle = color;
+  ctx.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(text), x, y);
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+    if (ctx.measureText(candidate).width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = candidate;
+    }
   }
 
-  const computedStyle = getComputedStyle(document.documentElement);
+  if (currentLine) {
+    lines.push(currentLine);
+  }
 
-  const backgroundColor =
-    computedStyle.getPropertyValue("--gp-bg").trim() || "#f8fafc";
+  lines.slice(0, maxLines).forEach((line, index) => {
+    drawCanvasText(ctx, line, x, y + index * lineHeight, {
+      size: 20,
+      color: "#334155",
+    });
+  });
+}
 
-  const canvas = await html2canvas(element, {
-    scale: Math.min(2, window.devicePixelRatio || 1.5),
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor,
-    logging: false,
-    imageTimeout: 5000,
-    removeContainer: true,
-    foreignObjectRendering: false,
-    onclone: (clonedDocument) => {
-      const sourceRoot = document.documentElement;
-      const clonedRoot = clonedDocument.documentElement;
+function createAcademicCanvas({ cgpa, totalCredits, subjects }) {
+  const validSubjects = getValidSubjects(subjects);
 
-      const variables = [
-        "--gp-bg",
-        "--gp-surface",
-        "--gp-surface-2",
-        "--gp-border",
-        "--gp-border-strong",
-        "--gp-text",
-        "--gp-text-secondary",
-        "--gp-text-muted",
-        "--gp-primary",
-        "--gp-primary-bg",
-        "--gp-success",
-        "--gp-success-bg",
-        "--gp-warning",
-        "--gp-warning-bg",
-        "--gp-danger",
-        "--gp-danger-bg",
-      ];
+  if (!validSubjects.length && Number(totalCredits) <= 0) {
+    throw new Error("No academic results available for export");
+  }
 
-      const sourceStyles = getComputedStyle(sourceRoot);
+  const groups = getGroupedSubjects(validSubjects);
+  const passed = validSubjects.filter(
+    (subject) => subject.grade !== "F",
+  ).length;
 
-      for (const variable of variables) {
-        clonedRoot.style.setProperty(
-          variable,
-          sourceStyles.getPropertyValue(variable),
-        );
-      }
+  const subjectRows = validSubjects.length;
+  const groupCount = groups.length;
 
-      clonedRoot.setAttribute(
-        "data-theme",
-        sourceRoot.getAttribute("data-theme") || "light",
-      );
-    },
+  const width = 1200;
+  const height = Math.max(900, 460 + subjectRows * 70 + groupCount * 105);
+
+  const canvas = document.createElement("canvas");
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    throw new Error("Canvas rendering is unavailable");
+  }
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#4f46e5";
+  ctx.fillRect(0, 0, width, 210);
+
+  drawCanvasText(ctx, "GradePilot", 72, 72, {
+    size: 48,
+    weight: 700,
+    color: "#ffffff",
   });
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
+  drawCanvasText(ctx, "ACADEMIC PERFORMANCE REPORT", 74, 123, {
+    size: 19,
+    weight: 600,
+    color: "#e0e7ff",
+  });
+
+  drawCanvasText(
+    ctx,
+    new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    74,
+    163,
+    {
+      size: 18,
+      color: "#e0e7ff",
+    },
+  );
+
+  drawRoundedRect(ctx, 60, 250, 1080, 160, 20, "#eef2ff");
+
+  const metrics = [
+    ["Current CGPA", formatNumber(cgpa)],
+    ["Total Credits", String(totalCredits)],
+    ["Subjects", String(validSubjects.length)],
+    ["Passed", String(passed)],
+  ];
+
+  metrics.forEach(([label, value], index) => {
+    const centerX = 195 + index * 270;
+
+    drawCanvasText(ctx, value, centerX, 310, {
+      size: 38,
+      weight: 700,
+      color: "#4f46e5",
+      align: "center",
+    });
+
+    drawCanvasText(ctx, label, centerX, 360, {
+      size: 17,
+      color: "#64748b",
+      align: "center",
+    });
+  });
+
+  let y = 465;
+
+  if (groups.length) {
+    drawCanvasText(ctx, "Subject Performance", 70, y, {
+      size: 29,
+      weight: 700,
+    });
+
+    y += 55;
+
+    for (const [period, periodSubjects] of groups) {
+      const stats = getGroupStats(periodSubjects);
+
+      drawRoundedRect(ctx, 60, y, 1080, 58, 12, "#4f46e5");
+
+      drawCanvasText(ctx, period, 82, y + 29, {
+        size: 21,
+        weight: 600,
+        color: "#ffffff",
+      });
+
+      drawCanvasText(
+        ctx,
+        `GPA ${formatNumber(stats.gpa)}  |  ${stats.credits} Credits`,
+        1110,
+        y + 29,
+        {
+          size: 19,
+          weight: 500,
+          color: "#ffffff",
+          align: "right",
+        },
+      );
+
+      y += 72;
+
+      drawRoundedRect(ctx, 60, y, 1080, 50, 8, "#e0e7ff");
+
+      drawCanvasText(ctx, "Subject", 82, y + 25, {
+        size: 19,
+        weight: 600,
+        color: "#4338ca",
+      });
+
+      drawCanvasText(ctx, "Credits", 780, y + 25, {
+        size: 19,
+        weight: 600,
+        color: "#4338ca",
+      });
+
+      drawCanvasText(ctx, "Grade", 950, y + 25, {
+        size: 19,
+        weight: 600,
+        color: "#4338ca",
+      });
+
+      y += 50;
+
+      periodSubjects.forEach((subject, index) => {
+        if (index % 2 === 0) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(60, y, 1080, 70);
+        }
+
+        ctx.font = "400 20px Inter, Arial, sans-serif";
+
+        drawWrappedText(ctx, subject.name.trim(), 82, y + 26, 640, 23, 2);
+
+        drawCanvasText(ctx, subject.credit, 780, y + 35, {
+          size: 20,
+        });
+
+        drawCanvasText(ctx, subject.grade, 950, y + 35, {
+          size: 20,
+          weight: 600,
+          color: "#4f46e5",
+        });
+
+        y += 70;
+      });
+
+      y += 35;
+    }
+  }
+
+  const footerY = height - 110;
+
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(60, footerY);
+  ctx.lineTo(1140, footerY);
+  ctx.stroke();
+
+  drawCanvasText(
+    ctx,
+    "Generated by GradePilot | Academic Performance Analytics",
+    60,
+    footerY + 40,
+    {
+      size: 17,
+      color: "#64748b",
+    },
+  );
+
+  drawCanvasText(
+    ctx,
+    "Not an official university transcript.",
+    60,
+    footerY + 72,
+    {
+      size: 15,
+      color: "#94a3b8",
+    },
+  );
+
+  return canvas;
+}
+
+export async function exportToImage(data) {
+  const canvas = createAcademicCanvas(data);
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (!result) {
         reject(new Error("Unable to generate PNG image"));
         return;
       }
 
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download = `GradePilot_Result_${Date.now()}.png`;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-      resolve();
+      resolve(result);
     }, "image/png");
   });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `GradePilot_Result_${Date.now()}.png`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
