@@ -16,6 +16,7 @@ import {
 } from "../data/universityData";
 import { calculateCGPA } from "../lib/calculations";
 import { academicApi } from "../lib/academic-api";
+import { backupAcademicData } from "../lib/academic-backup";
 import { useSession } from "../lib/auth-client";
 import { AcademicContext } from "./academicContextInstance";
 import {
@@ -239,7 +240,7 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
   const syncReadyRef = useRef(false);
   const savingRef = useRef(false);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef(false);
   const initializedRef = useRef(false);
   const conflictRef = useRef(false);
 
@@ -247,6 +248,10 @@ function AcademicWorkspaceProvider({ children, userId }) {
   const retryTimerRef = useRef(null);
   const saveTimerRef = useRef(null);
   const saveRequestedRef = useRef(false);
+  const offlineRef = useRef(false);
+  const manualSyncRef = useRef(false);
+  const syncPromptRef = useRef(false);
+  const initializationRef = useRef(false);
 
   const hadUserLocalRef = useRef(
     userId ? hasSavedAcademicState(userId) : false,
@@ -259,6 +264,11 @@ function AcademicWorkspaceProvider({ children, userId }) {
   const updateSyncReady = useCallback((ready) => {
     syncReadyRef.current = ready;
     setSyncReady(ready);
+  }, []);
+
+  const updateSyncPrompt = useCallback((open) => {
+    syncPromptRef.current = open;
+    setSyncPrompt(open);
   }, []);
 
   const clearSaveTimer = useCallback(() => {
@@ -304,9 +314,37 @@ function AcademicWorkspaceProvider({ children, userId }) {
     saveAcademicState(state, userId);
   }, [state, userId]);
 
+  const preserveCurrentLocal = useCallback(
+    (reason) => {
+      if (!userId) {
+        return true;
+      }
+
+      const current = stateRef.current;
+
+      const saved = backupAcademicData(userId, getSyncData(current), reason);
+
+      if (!saved) {
+        toast.error(
+          "Unable to back up local records. Cloud data was not loaded.",
+          { id: "gradepilot-sync" },
+        );
+      }
+
+      return saved;
+    },
+    [userId],
+  );
+
   const loadCloudState = useCallback(
-    (record) => {
-      if (!record) return;
+    (record, preserveLocal = false) => {
+      if (!record) {
+        return false;
+      }
+
+      if (preserveLocal && !preserveCurrentLocal("cloud-selection")) {
+        return false;
+      }
 
       clearSaveTimer();
       clearRetryTimer();
@@ -316,33 +354,49 @@ function AcademicWorkspaceProvider({ children, userId }) {
         createInitialState(),
       );
 
+      revisionRef.current = record.revision;
+      lastSavedRef.current = getDataSignature(normalized);
+
+      stateRef.current = normalized;
+
+      initializedRef.current = true;
+      saveRequestedRef.current = false;
+      offlineRef.current = false;
+      conflictRef.current = false;
+
       dispatch({
         type: "LOAD_STATE",
         payload: normalized,
       });
 
-      stateRef.current = normalized;
-
-      revisionRef.current = record.revision;
-      lastSavedRef.current = getDataSignature(normalized);
+      saveAcademicState(normalized, userId);
 
       setCloudRecord(record);
-      setSyncPrompt(false);
+      updateSyncPrompt(false);
       setSyncStatus("saved");
 
-      conflictRef.current = false;
-      initializedRef.current = true;
-      saveRequestedRef.current = false;
-
       updateSyncReady(true);
+
+      return true;
     },
-    [clearSaveTimer, clearRetryTimer, updateSyncReady],
+    [
+      userId,
+      preserveCurrentLocal,
+      clearSaveTimer,
+      clearRetryTimer,
+      updateSyncReady,
+      updateSyncPrompt,
+    ],
   );
 
   const refreshCloudRecord = useCallback(async () => {
     const result = await academicApi.get();
 
     const record = result.record;
+
+    if (!mountedRef.current) {
+      return record;
+    }
 
     setCloudRecord(record);
     revisionRef.current = record?.revision ?? null;
@@ -351,7 +405,11 @@ function AcademicWorkspaceProvider({ children, userId }) {
   }, []);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || initializationRef.current) {
+      return;
+    }
+
+    initializationRef.current = true;
 
     let cancelled = false;
 
@@ -361,7 +419,9 @@ function AcademicWorkspaceProvider({ children, userId }) {
       try {
         const result = await academicApi.get();
 
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) {
+          return;
+        }
 
         const record = result.record;
 
@@ -373,7 +433,7 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
         if (record) {
           if (hasUserLocal || hasGuestLocal) {
-            setSyncPrompt(true);
+            updateSyncPrompt(true);
             setSyncStatus("pending");
             return;
           }
@@ -382,10 +442,12 @@ function AcademicWorkspaceProvider({ children, userId }) {
           return;
         }
 
-        setSyncPrompt(true);
+        updateSyncPrompt(true);
         setSyncStatus("pending");
       } catch {
-        if (cancelled) return;
+        if (cancelled || !mountedRef.current) {
+          return;
+        }
 
         setSyncStatus("offline");
         updateSyncReady(false);
@@ -396,12 +458,16 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
     return () => {
       cancelled = true;
+      initializationRef.current = false;
     };
-  }, [userId, loadCloudState, updateSyncReady]);
+  }, [userId, loadCloudState, updateSyncReady, updateSyncPrompt]);
 
   const activateCloudData = useCallback(async () => {
-    if (syncBusy || !cloudRecord) return;
+    if (manualSyncRef.current || !cloudRecord) {
+      return;
+    }
 
+    manualSyncRef.current = true;
     setSyncBusy(true);
 
     try {
@@ -409,13 +475,33 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
       if (!latest) {
         setSyncStatus("pending");
+
         toast.error("Cloud records are no longer available.", {
           id: "gradepilot-sync",
         });
+
         return;
       }
 
-      loadCloudState(latest);
+      const localSignature = getDataSignature(stateRef.current);
+      const cloudSignature = getDataSignature(
+        validateAcademicState(latest.data, createInitialState()),
+      );
+
+      const shouldBackup =
+        hadUserLocalRef.current ||
+        initializedRef.current ||
+        localSignature !== initialSignatureRef.current;
+
+      const loaded = loadCloudState(
+        latest,
+        shouldBackup && localSignature !== cloudSignature,
+      );
+
+      if (!loaded) {
+        setSyncStatus("pending");
+        return;
+      }
 
       toast.success("Cloud records loaded successfully", {
         id: "gradepilot-sync",
@@ -427,42 +513,49 @@ function AcademicWorkspaceProvider({ children, userId }) {
         id: "gradepilot-sync",
       });
     } finally {
+      manualSyncRef.current = false;
       setSyncBusy(false);
     }
-  }, [cloudRecord, syncBusy, refreshCloudRecord, loadCloudState]);
+  }, [cloudRecord, refreshCloudRecord, loadCloudState]);
 
   const activateLocalData = useCallback(async () => {
-    if (syncBusy) return;
-
-    const guestAvailable = hasSavedAcademicState();
-    const userAvailable = hadUserLocalRef.current;
-
-    let source = stateRef.current;
-
-    if (guestAvailable && userAvailable) {
-      const choice = await Swal.fire({
-        title: "Choose local records",
-        text: "Which local academic records would you like to use?",
-        showDenyButton: true,
-        showCancelButton: true,
-        confirmButtonText: "Guest Data",
-        denyButtonText: "Account Data",
-        confirmButtonColor: "#4f46e5",
-      });
-
-      if (choice.isDismissed) return;
-
-      source = choice.isConfirmed
-        ? loadAcademicState(createInitialState())
-        : loadAcademicState(createInitialState(), userId);
-    } else if (guestAvailable && !userAvailable) {
-      source = loadAcademicState(createInitialState());
+    if (manualSyncRef.current) {
+      return;
     }
 
+    manualSyncRef.current = true;
     setSyncBusy(true);
-    setSyncStatus("checking");
 
     try {
+      const guestAvailable = hasSavedAcademicState();
+      const userAvailable = hadUserLocalRef.current;
+
+      let source = stateRef.current;
+
+      if (guestAvailable && userAvailable) {
+        const choice = await Swal.fire({
+          title: "Choose local records",
+          text: "Which local academic records would you like to use?",
+          showDenyButton: true,
+          showCancelButton: true,
+          confirmButtonText: "Guest Data",
+          denyButtonText: "Account Data",
+          confirmButtonColor: "#4f46e5",
+        });
+
+        if (choice.isDismissed) {
+          return;
+        }
+
+        source = choice.isConfirmed
+          ? loadAcademicState(createInitialState())
+          : loadAcademicState(createInitialState(), userId);
+      } else if (guestAvailable && !userAvailable) {
+        source = loadAcademicState(createInitialState());
+      }
+
+      setSyncStatus("checking");
+
       const latest = await refreshCloudRecord();
 
       if (latest) {
@@ -495,8 +588,9 @@ function AcademicWorkspaceProvider({ children, userId }) {
       });
     } catch (error) {
       if (error.status === 409) {
+        updateSyncReady(false);
+        updateSyncPrompt(true);
         setSyncStatus("pending");
-        setSyncPrompt(true);
 
         toast.error(
           "Cloud records changed. Please review the latest version.",
@@ -510,12 +604,21 @@ function AcademicWorkspaceProvider({ children, userId }) {
         });
       }
     } finally {
+      manualSyncRef.current = false;
       setSyncBusy(false);
     }
-  }, [syncBusy, userId, refreshCloudRecord, loadCloudState]);
+  }, [
+    userId,
+    refreshCloudRecord,
+    loadCloudState,
+    updateSyncReady,
+    updateSyncPrompt,
+  ]);
 
   const handleConflict = useCallback(async () => {
-    if (conflictRef.current) return;
+    if (conflictRef.current) {
+      return;
+    }
 
     conflictRef.current = true;
 
@@ -527,13 +630,22 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
     try {
       await refreshCloudRecord();
-      setSyncPrompt(true);
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      updateSyncPrompt(true);
 
       toast.error(
         "Cloud data changed on another device. Choose which version to keep.",
         { id: "gradepilot-sync" },
       );
     } catch {
+      if (!mountedRef.current) {
+        return;
+      }
+
       setSyncStatus("offline");
 
       toast.error(
@@ -543,16 +655,24 @@ function AcademicWorkspaceProvider({ children, userId }) {
     } finally {
       conflictRef.current = false;
     }
-  }, [clearSaveTimer, clearRetryTimer, refreshCloudRecord, updateSyncReady]);
+  }, [
+    clearSaveTimer,
+    clearRetryTimer,
+    refreshCloudRecord,
+    updateSyncReady,
+    updateSyncPrompt,
+  ]);
 
   const performSaveRef = useRef(null);
 
   const performSave = useCallback(async () => {
     if (
       !userId ||
+      !mountedRef.current ||
       !syncReadyRef.current ||
       savingRef.current ||
-      conflictRef.current
+      conflictRef.current ||
+      manualSyncRef.current
     ) {
       return;
     }
@@ -562,6 +682,7 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
     if (signature === lastSavedRef.current) {
       saveRequestedRef.current = false;
+      offlineRef.current = false;
       setSyncStatus("saved");
       return;
     }
@@ -591,6 +712,9 @@ function AcademicWorkspaceProvider({ children, userId }) {
 
       revisionRef.current = result.record.revision;
       lastSavedRef.current = signature;
+
+      offlineRef.current = false;
+
       setCloudRecord(result.record);
 
       if (getDataSignature(stateRef.current) === signature) {
@@ -620,12 +744,19 @@ function AcademicWorkspaceProvider({ children, userId }) {
         return;
       }
 
-      setSyncStatus("offline");
+      offlineRef.current = true;
       saveRequestedRef.current = true;
+
+      setSyncStatus("offline");
+
+      clearRetryTimer();
 
       retryTimerRef.current = window.setTimeout(() => {
         retryTimerRef.current = null;
-        performSaveRef.current?.();
+
+        if (mountedRef.current && syncReadyRef.current) {
+          performSaveRef.current?.();
+        }
       }, RETRY_DELAY);
     } finally {
       savingRef.current = false;
@@ -635,6 +766,7 @@ function AcademicWorkspaceProvider({ children, userId }) {
         generation === generationRef.current &&
         syncReadyRef.current &&
         saveRequestedRef.current &&
+        !offlineRef.current &&
         retryTimerRef.current === null
       ) {
         clearSaveTimer();
@@ -656,7 +788,9 @@ function AcademicWorkspaceProvider({ children, userId }) {
   performSaveRef.current = performSave;
 
   useEffect(() => {
-    if (!userId || !syncReady) return;
+    if (!userId || !syncReady) {
+      return;
+    }
 
     const signature = getDataSignature(state);
 
@@ -664,32 +798,44 @@ function AcademicWorkspaceProvider({ children, userId }) {
       return;
     }
 
-    if (savingRef.current) {
-      saveRequestedRef.current = true;
+    saveRequestedRef.current = true;
+
+    if (savingRef.current || manualSyncRef.current) {
+      return;
+    }
+
+    if (offlineRef.current && retryTimerRef.current !== null) {
       return;
     }
 
     clearSaveTimer();
-    clearRetryTimer();
 
-    setSyncStatus("saving");
+    setSyncStatus(offlineRef.current ? "offline" : "saving");
 
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
       performSaveRef.current?.();
     }, SYNC_DELAY);
 
-    return clearSaveTimer;
-  }, [state, userId, syncReady, clearSaveTimer, clearRetryTimer]);
+    return () => {
+      clearSaveTimer();
+    };
+  }, [state, userId, syncReady, clearSaveTimer]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      return;
+    }
 
     const handleOnline = () => {
-      if (!syncReadyRef.current) return;
+      if (!syncReadyRef.current) {
+        return;
+      }
 
       clearRetryTimer();
       clearSaveTimer();
+
+      offlineRef.current = false;
 
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null;
@@ -737,7 +883,7 @@ function AcademicWorkspaceProvider({ children, userId }) {
         busy={syncBusy}
         onUseCloud={activateCloudData}
         onKeepLocal={activateLocalData}
-        onClose={() => setSyncPrompt(false)}
+        onClose={() => updateSyncPrompt(false)}
       />
     </AcademicContext.Provider>
   );
