@@ -42,10 +42,18 @@ function parseRequestBody(request) {
 }
 
 function validateRequestSize(request, body) {
-  const contentLength = Number(request.headers["content-length"]);
+  const rawLength = request.headers["content-length"];
 
-  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_SIZE) {
-    return false;
+  if (rawLength !== undefined) {
+    const contentLength = Number(rawLength);
+
+    if (
+      !Number.isSafeInteger(contentLength) ||
+      contentLength < 0 ||
+      contentLength > MAX_BODY_SIZE
+    ) {
+      return false;
+    }
   }
 
   const serialized = JSON.stringify(body);
@@ -68,7 +76,7 @@ export default async function handler(request, response) {
   try {
     const user = await getAuthenticatedUser(request);
 
-    if (!user) {
+    if (!user?.id) {
       return sendError(response, 401, "Authentication required");
     }
 

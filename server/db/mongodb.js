@@ -10,7 +10,18 @@ function configureDns() {
     return;
   }
 
-  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  const customDns = process.env.MONGODB_DNS_SERVERS;
+
+  if (customDns) {
+    const servers = customDns
+      .split(",")
+      .map((server) => server.trim())
+      .filter(Boolean);
+
+    if (servers.length > 0) {
+      dns.setServers(servers);
+    }
+  }
 
   globalForMongo.gradepilotDnsConfigured = true;
 }
@@ -29,6 +40,7 @@ function createMongoClient() {
     minPoolSize: 0,
     maxIdleTimeMS: 30000,
     serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
   });
 }
 
