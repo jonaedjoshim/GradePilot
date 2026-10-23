@@ -4,6 +4,7 @@ import {
   getAcademicRecord,
   updateAcademicRecord,
 } from "../server/academic/academic-data.js";
+import { validateAcademicData } from "../server/academic/academic-validation.js";
 
 const MAX_BODY_SIZE = 1024 * 1024;
 
@@ -32,23 +33,28 @@ async function getAuthenticatedUser(request) {
   return session?.user || null;
 }
 
-function validateAcademicPayload(data) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
+function parseRequestBody(request) {
+  if (typeof request.body === "string") {
+    return JSON.parse(request.body);
+  }
+
+  return request.body;
+}
+
+function validateRequestSize(request, body) {
+  const contentLength = Number(request.headers["content-length"]);
+
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_SIZE) {
     return false;
   }
 
-  if (
-    !["national", "other"].includes(data.university) ||
-    !Array.isArray(data.subjects)
-  ) {
+  const serialized = JSON.stringify(body);
+
+  if (!serialized) {
     return false;
   }
 
-  if (data.subjects.length > 500) {
-    return false;
-  }
-
-  return true;
+  return Buffer.byteLength(serialized, "utf8") <= MAX_BODY_SIZE;
 }
 
 export default async function handler(request, response) {
@@ -76,24 +82,30 @@ export default async function handler(request, response) {
       });
     }
 
-    const body = request.body;
+    let body;
 
-    if (!body || typeof body !== "object") {
+    try {
+      body = parseRequestBody(request);
+    } catch {
+      return sendError(response, 400, "Invalid JSON request body");
+    }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
       return sendError(response, 400, "Invalid request body");
     }
 
-    const serialized = JSON.stringify(body);
-
-    if (Buffer.byteLength(serialized, "utf8") > MAX_BODY_SIZE) {
-      return sendError(response, 413, "Academic data is too large");
+    if (!validateRequestSize(request, body)) {
+      return sendError(response, 413, "Academic data exceeds the size limit");
     }
 
-    if (!validateAcademicPayload(body.data)) {
-      return sendError(response, 400, "Invalid academic data");
+    const validation = validateAcademicData(body.data);
+
+    if (!validation.valid) {
+      return sendError(response, 400, validation.message);
     }
 
     if (request.method === "POST") {
-      const result = await createAcademicRecord(user.id, body.data);
+      const result = await createAcademicRecord(user.id, validation.data);
 
       if (result.conflict) {
         return sendError(
@@ -103,9 +115,12 @@ export default async function handler(request, response) {
         );
       }
 
+      const record = await getAcademicRecord(user.id);
+
       return response.status(201).json({
         success: true,
         message: "Academic data created successfully",
+        record,
       });
     }
 
@@ -122,7 +137,7 @@ export default async function handler(request, response) {
 
     const result = await updateAcademicRecord(
       user.id,
-      body.data,
+      validation.data,
       body.expectedUpdatedAt,
     );
 
@@ -134,9 +149,12 @@ export default async function handler(request, response) {
       );
     }
 
+    const record = await getAcademicRecord(user.id);
+
     return response.status(200).json({
       success: true,
       message: "Academic data updated successfully",
+      record,
     });
   } catch (error) {
     console.error("Academic API error:", error);
